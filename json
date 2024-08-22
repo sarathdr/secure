@@ -1,6 +1,130 @@
 {
   "$schema": "http://json-schema.org/draft-04/schema#",
   "type": "object",
+  "definitions": {
+    "HostId": {
+      "type": "object",
+      "properties": {
+        "Type": {
+          "type": "string"
+        },
+        "Id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "Type",
+        "Id"
+      ]
+    },
+    "Feature": {
+      "type": "object",
+      "properties": {
+        "ReservationGroupName": {
+          "type": "string"
+        },
+        "UsageExpiry": {
+          "type": "integer"
+        },
+        "LastConsumeTime": {
+          "type": "integer"
+        },
+        "Count": {
+          "type": "integer"
+        },
+        "Name": {
+          "type": "string"
+        },
+        "Overdraft": {
+          "type": "integer"
+        },
+        "FeatureId": {
+          "type": "string"
+        },
+        "PartitionName": {
+          "type": "string"
+        },
+        "SelectorDictionary": {
+          "type": "object",
+          "properties": {
+            "REGION": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "REGION"
+          ]
+        },
+        "Type": {
+          "type": "string"
+        },
+        "Version": {
+          "type": "string"
+        },
+        "Reusable": {
+          "type": "boolean"
+        },
+        "LastUpdateTime": {
+          "type": "integer"
+        },
+        "TotalUsedCount": {
+          "type": "integer"
+        },
+        "IsPartial": {
+          "type": "boolean"
+        },
+        "UsageCount": {
+          "type": "integer"
+        },
+        "OverdraftUsed": {
+          "type": "integer"
+        },
+        "Reserved": {
+          "type": "integer"
+        },
+        "EntitledArticles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "EntitledArticleVersions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ActivationIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "Expires": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ReservationGroupName",
+        "Count",
+        "Name",
+        "Overdraft",
+        "FeatureId",
+        "PartitionName",
+        "Type",
+        "Version",
+        "Reusable",
+        "TotalUsedCount",
+        "IsPartial",
+        "UsageCount",
+        "OverdraftUsed",
+        "Reserved",
+        "EntitledArticles",
+        "EntitledArticleVersions",
+        "ActivationIds"
+      ]
+    }
+  },
   "properties": {
     "HostUUID": {
       "type": "string"
@@ -24,622 +148,118 @@
       "type": "string"
     },
     "SourceHostId": {
-      "type": "object",
-      "properties": {
-        "Type": {
-          "type": "string"
-        },
-        "Id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "Type",
-        "Id"
-      ]
+      "$ref": "#/definitions/HostId"
     },
     "Clients": {
       "type": "array",
-      "items": [
-        {
-          "type": "object",
-          "properties": {
-            "RequestOperation": {
-              "type": "string"
+      "items": {
+        "type": "object",
+        "properties": {
+          "RequestOperation": {
+            "type": "string"
+          },
+          "VmInfo": {
+            "type": "object",
+            "properties": {
+              "vmInfoKey": {
+                "type": "string"
+              }
             },
-            "VmInfo": {
-              "type": "object",
-              "properties": {
-                "vmInfoKey": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "vmInfoKey"
-              ]
-            },
-            "MachineType": {
-              "type": "string"
-            },
-            "RequestHostId": {
-              "type": "object",
-              "properties": {
-                "Type": {
-                  "type": "string"
-                },
-                "Id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "Type",
-                "Id"
-              ]
-            },
-            "ServedStatus": {
-              "type": "string"
-            },
-            "MeteredFeatures": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "ReservationGroupName": {
-                      "type": "string"
-                    },
-                    "LastConsumeTime": {
-                      "type": "integer"
-                    },
-                    "Count": {
-                      "type": "integer"
-                    },
-                    "Name": {
-                      "type": "string"
-                    },
-                    "Overdraft": {
-                      "type": "integer"
-                    },
-                    "FeatureId": {
-                      "type": "string"
-                    },
-                    "PartitionName": {
-                      "type": "string"
-                    },
-                    "SelectorDictionary": {
-                      "type": "object",
-                      "properties": {
-                        "REGION": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "REGION"
-                      ]
-                    },
-                    "Type": {
-                      "type": "string"
-                    },
-                    "Version": {
-                      "type": "string"
-                    },
-                    "Reusable": {
-                      "type": "boolean"
-                    },
-                    "LastUpdateTime": {
-                      "type": "integer"
-                    },
-                    "TotalUsedCount": {
-                      "type": "integer"
-                    },
-                    "IsPartial": {
-                      "type": "boolean"
-                    },
-                    "UsageCount": {
-                      "type": "integer"
-                    },
-                    "OverdraftUsed": {
-                      "type": "integer"
-                    },
-                    "Reserved": {
-                      "type": "integer"
-                    },
-                    "EntitledArticles": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "EntitledArticleVersions": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "ActivationIds": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "ReservationGroupName",
-                    "LastConsumeTime",
-                    "Count",
-                    "Name",
-                    "Overdraft",
-                    "FeatureId",
-                    "PartitionName",
-                    "SelectorDictionary",
-                    "Type",
-                    "Version",
-                    "Reusable",
-                    "LastUpdateTime",
-                    "TotalUsedCount",
-                    "IsPartial",
-                    "UsageCount",
-                    "OverdraftUsed",
-                    "Reserved",
-                    "EntitledArticles",
-                    "EntitledArticleVersions",
-                    "ActivationIds"
-                  ]
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "LastConsumeTime": {
-                      "type": "integer"
-                    },
-                    "Count": {
-                      "type": "integer"
-                    },
-                    "Name": {
-                      "type": "string"
-                    },
-                    "Overdraft": {
-                      "type": "integer"
-                    },
-                    "FeatureId": {
-                      "type": "string"
-                    },
-                    "PartitionName": {
-                      "type": "string"
-                    },
-                    "Type": {
-                      "type": "string"
-                    },
-                    "Version": {
-                      "type": "string"
-                    },
-                    "Reusable": {
-                      "type": "boolean"
-                    },
-                    "LastUpdateTime": {
-                      "type": "integer"
-                    },
-                    "TotalUsedCount": {
-                      "type": "integer"
-                    },
-                    "IsPartial": {
-                      "type": "boolean"
-                    },
-                    "UsageCount": {
-                      "type": "integer"
-                    },
-                    "OverdraftUsed": {
-                      "type": "integer"
-                    },
-                    "Reserved": {
-                      "type": "integer"
-                    },
-                    "EntitledArticles": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "EntitledArticleVersions": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "ActivationIds": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "LastConsumeTime",
-                    "Count",
-                    "Name",
-                    "Overdraft",
-                    "FeatureId",
-                    "PartitionName",
-                    "Type",
-                    "Version",
-                    "Reusable",
-                    "LastUpdateTime",
-                    "TotalUsedCount",
-                    "IsPartial",
-                    "UsageCount",
-                    "OverdraftUsed",
-                    "Reserved",
-                    "EntitledArticles",
-                    "EntitledArticleVersions",
-                    "ActivationIds"
-                  ]
-                }
-              ]
-            },
-            "EnterpriseId": {
-              "type": "string"
-            },
-            "IsAllowDuplicateClientEnabled": {
-              "type": "boolean"
-            },
-            "ClientHostId": {
-              "type": "object",
-              "properties": {
-                "Type": {
-                  "type": "string"
-                },
-                "Id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "Type",
-                "Id"
-              ]
-            },
-            "ServerId": {
-              "type": "object",
-              "properties": {
-                "Type": {
-                  "type": "string"
-                },
-                "Id": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "Type",
-                "Id"
-              ]
-            },
-            "LastUpdateTime": {
-              "type": "integer"
-            },
-            "ConcurrentFeatures": {
-              "type": "array",
-              "items": [
-                {
-                  "type": "object",
-                  "properties": {
-                    "ReservationGroupName": {
-                      "type": "string"
-                    },
-                    "UsageExpiry": {
-                      "type": "integer"
-                    },
-                    "Count": {
-                      "type": "integer"
-                    },
-                    "Name": {
-                      "type": "string"
-                    },
-                    "Overdraft": {
-                      "type": "integer"
-                    },
-                    "FeatureId": {
-                      "type": "string"
-                    },
-                    "PartitionName": {
-                      "type": "string"
-                    },
-                    "SelectorDictionary": {
-                      "type": "object",
-                      "properties": {
-                        "REGION": {
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "REGION"
-                      ]
-                    },
-                    "Type": {
-                      "type": "string"
-                    },
-                    "Version": {
-                      "type": "string"
-                    },
-                    "Reusable": {
-                      "type": "boolean"
-                    },
-                    "TotalUsedCount": {
-                      "type": "integer"
-                    },
-                    "IsPartial": {
-                      "type": "boolean"
-                    },
-                    "Expires": {
-                      "type": "integer"
-                    },
-                    "UsageCount": {
-                      "type": "integer"
-                    },
-                    "OverdraftUsed": {
-                      "type": "integer"
-                    },
-                    "Reserved": {
-                      "type": "integer"
-                    },
-                    "EntitledArticles": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "EntitledArticleVersions": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "ActivationIds": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "ReservationGroupName",
-                    "UsageExpiry",
-                    "Count",
-                    "Name",
-                    "Overdraft",
-                    "FeatureId",
-                    "PartitionName",
-                    "SelectorDictionary",
-                    "Type",
-                    "Version",
-                    "Reusable",
-                    "TotalUsedCount",
-                    "IsPartial",
-                    "Expires",
-                    "UsageCount",
-                    "OverdraftUsed",
-                    "Reserved",
-                    "EntitledArticles",
-                    "EntitledArticleVersions",
-                    "ActivationIds"
-                  ]
-                },
-                {
-                  "type": "object",
-                  "properties": {
-                    "UsageExpiry": {
-                      "type": "integer"
-                    },
-                    "Count": {
-                      "type": "integer"
-                    },
-                    "Name": {
-                      "type": "string"
-                    },
-                    "Overdraft": {
-                      "type": "integer"
-                    },
-                    "FeatureId": {
-                      "type": "string"
-                    },
-                    "PartitionName": {
-                      "type": "string"
-                    },
-                    "Type": {
-                      "type": "string"
-                    },
-                    "Version": {
-                      "type": "string"
-                    },
-                    "Reusable": {
-                      "type": "boolean"
-                    },
-                    "TotalUsedCount": {
-                      "type": "integer"
-                    },
-                    "IsPartial": {
-                      "type": "boolean"
-                    },
-                    "Expires": {
-                      "type": "integer"
-                    },
-                    "UsageCount": {
-                      "type": "integer"
-                    },
-                    "OverdraftUsed": {
-                      "type": "integer"
-                    },
-                    "Reserved": {
-                      "type": "integer"
-                    },
-                    "EntitledArticles": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "EntitledArticleVersions": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    },
-                    "ActivationIds": {
-                      "type": "array",
-                      "items": [
-                        {
-                          "type": "string"
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "UsageExpiry",
-                    "Count",
-                    "Name",
-                    "Overdraft",
-                    "FeatureId",
-                    "PartitionName",
-                    "Type",
-                    "Version",
-                    "Reusable",
-                    "TotalUsedCount",
-                    "IsPartial",
-                    "Expires",
-                    "UsageCount",
-                    "OverdraftUsed",
-                    "Reserved",
-                    "EntitledArticles",
-                    "EntitledArticleVersions",
-                    "ActivationIds"
-                  ]
-                }
-              ]
-            },
-            "IsIncremental": {
-              "type": "boolean"
-            },
-            "ServerName": {
-              "type": "string"
-            },
-            "AcquisitionId": {
-              "type": "string"
-            },
-            "CorrelationId": {
-              "type": "string"
-            },
-            "VendorDictionary": {
-              "type": "object",
-              "properties": {
-                "clientKey": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "clientKey"
-              ]
-            },
-            "UUID": {
-              "type": "string"
-            },
-            "CloneSuspect": {
-              "type": "boolean"
+            "required": [
+              "vmInfoKey"
+            ]
+          },
+          "MachineType": {
+            "type": "string"
+          },
+          "RequestHostId": {
+            "$ref": "#/definitions/HostId"
+          },
+          "ServedStatus": {
+            "type": "string"
+          },
+          "MeteredFeatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Feature"
             }
           },
-          "required": [
-            "RequestOperation",
-            "VmInfo",
-            "MachineType",
-            "RequestHostId",
-            "ServedStatus",
-            "MeteredFeatures",
-            "EnterpriseId",
-            "IsAllowDuplicateClientEnabled",
-            "ClientHostId",
-            "ServerId",
-            "LastUpdateTime",
-            "ConcurrentFeatures",
-            "IsIncremental",
-            "ServerName",
-            "AcquisitionId",
-            "CorrelationId",
-            "VendorDictionary",
-            "UUID",
-            "CloneSuspect"
-          ]
-        }
-      ]
+          "EnterpriseId": {
+            "type": "string"
+          },
+          "IsAllowDuplicateClientEnabled": {
+            "type": "boolean"
+          },
+          "ClientHostId": {
+            "$ref": "#/definitions/HostId"
+          },
+          "ServerId": {
+            "$ref": "#/definitions/HostId"
+          },
+          "LastUpdateTime": {
+            "type": "integer"
+          },
+          "ConcurrentFeatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/Feature"
+            }
+          },
+          "IsIncremental": {
+            "type": "boolean"
+          },
+          "ServerName": {
+            "type": "string"
+          },
+          "AcquisitionId": {
+            "type": "string"
+          },
+          "CorrelationId": {
+            "type": "string"
+          },
+          "VendorDictionary": {
+            "type": "object",
+            "properties": {
+              "clientKey": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "clientKey"
+            ]
+          },
+          "UUID": {
+            "type": "string"
+          },
+          "CloneSuspect": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "RequestOperation",
+          "VmInfo",
+          "MachineType",
+          "RequestHostId",
+          "ServedStatus",
+          "MeteredFeatures",
+          "EnterpriseId",
+          "IsAllowDuplicateClientEnabled",
+          "ClientHostId",
+          "ServerId",
+          "LastUpdateTime",
+          "ConcurrentFeatures",
+          "IsIncremental",
+          "ServerName",
+          "AcquisitionId",
+          "CorrelationId",
+          "VendorDictionary",
+          "UUID",
+          "CloneSuspect"
+        ]
+      }
     },
     "TargetId": {
-      "type": "object",
-      "properties": {
-        "Type": {
-          "type": "string"
-        },
-        "Id": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "Type",
-        "Id"
-      ]
+      "$ref": "#/definitions/HostId"
     },
     "IdentityName": {
       "type": "string"
