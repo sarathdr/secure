@@ -1,85 +1,138 @@
-package com.usage;
-
 import com.usage.config.ConfigLoader;
 import com.usage.verticles.services.ApiService;
 import com.usage.verticles.services.RabbitMQService;
 import com.usage.verticles.services.SyncMessageService;
 import com.usage.verticles.services.VerticleService;
 import com.usage.verticles.services.WriteUsageService;
-import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Future;
 import io.vertx.core.Promise;
-import io.vertx.core.logging.SLF4JLogDelegateFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonObject;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
-public class UsageApp extends AbstractVerticle {
-    private static final Logger LOG = LoggerFactory.getLogger(UsageApp.class);
-    private static final int INSTANCES = 2 * Runtime.getRuntime().availableProcessors();
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-    private final List<VerticleService> services = new ArrayList<>();
+@ExtendWith(VertxExtension.class)
+public class UsageAppTest {
 
-    public List<VerticleService> getServices() {
-        if (services.isEmpty()) {
-            services.add(RabbitMQService.getInstance(INSTANCES));
-            services.add(WriteUsageService.getInstance(INSTANCES));
-            services.add(ApiService.getInstance(INSTANCES));
-            services.add(SyncMessageService.getInstance(INSTANCES));
-        }
+    @Mock
+    private ConfigLoader configLoader;
 
-        return services;
+    @Mock
+    private RabbitMQService rabbitMQService;
+
+    @Mock
+    private WriteUsageService writeUsageService;
+
+    @Mock
+    private ApiService apiService;
+
+    @Mock
+    private SyncMessageService syncMessageService;
+
+    @Mock
+    private Vertx vertx;
+
+    @InjectMocks
+    private UsageApp usageApp;
+
+    @BeforeEach
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+
+        when(rabbitMQService.deploy(any(), any())).thenReturn(Future.succeededFuture());
+        when(writeUsageService.deploy(any(), any())).thenReturn(Future.succeededFuture());
+        when(apiService.deploy(any(), any())).thenReturn(Future.succeededFuture());
+        when(syncMessageService.deploy(any(), any())).thenReturn(Future.succeededFuture());
+
+        when(rabbitMQService.teardown()).thenReturn(Future.succeededFuture());
+        when(writeUsageService.teardown()).thenReturn(Future.succeededFuture());
+        when(apiService.teardown()).thenReturn(Future.succeededFuture());
+        when(syncMessageService.teardown()).thenReturn(Future.succeededFuture());
     }
 
-    @Override
-    public void start(final Promise<Void> startPromise) {
-        configureLogging();
-        ConfigLoader.get().load(vertx)
-                .compose((jsonConfig) -> {
-                    LOG.debug("Config loaded" + jsonConfig.toString());
-
-                    return Future.all(
-                            getServices()
-                                    .stream()
-                                    .map(service -> service.deploy(vertx, jsonConfig))
-                                    .collect(Collectors.toList())
-                    );
-                })
-                .onSuccess(resul -> {
-                    LOG.info("Service deployment completed");
-                    startPromise.complete();
-                })
-                .onFailure((err) -> {
-                    LOG.error("Unable to deploy services.", err);
-                    startPromise.fail(err);
-                });
-
-        //register hook for when jvm shuts down to correctly stop all verticles
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> vertx.close()));
+    @Test
+    public void testGetServices() {
+        List<VerticleService> services = usageApp.getServices();
+        assertEquals(4, services.size());
+        verifyNoMoreInteractions(configLoader);  // Ensure no interaction with ConfigLoader for this method
     }
 
-    @Override
-    public void stop(Promise<Void> stopPromise) {
-        Future.all(getServices()
-                        .stream()
-                        .map(VerticleService::teardown)
-                        .collect(Collectors.toList())
-                )
-                .onSuccess((r) -> stopPromise.complete())
-                .onFailure(e -> {
-                    LOG.error("Failed to stop the services", e);
-                    stopPromise.fail(e);
-                });
+    @Test
+    public void testStartSuccess(VertxTestContext testContext) {
+        JsonObject mockConfig = new JsonObject();
+        when(configLoader.load(any())).thenReturn(Future.succeededFuture(mockConfig));
+
+        Promise<Void> startPromise = Promise.promise();
+        usageApp.start(startPromise);
+
+        startPromise.future().onComplete(testContext.succeeding(v -> {
+            verify(configLoader).load(any());
+            verify(rabbitMQService).deploy(any(), eq(mockConfig));
+            verify(writeUsageService).deploy(any(), eq(mockConfig));
+            verify(apiService).deploy(any(), eq(mockConfig));
+            verify(syncMessageService).deploy(any(), eq(mockConfig));
+            testContext.completeNow();
+        }));
     }
 
-    private void configureLogging() {
-        // set vertx logger delegate factory to slf4j
-        final String logFactory = System.getProperty("org.vertx.logger-delegate-factory-class-name");
-        if (logFactory == null) {
-            System.setProperty("org.vertx.logger-delegate-factory-class-name", SLF4JLogDelegateFactory.class.getName());
-        }
+    @Test
+    public void testStartFailure(VertxTestContext testContext) {
+        Throwable error = new RuntimeException("Failed to load config");
+        when(configLoader.load(any())).thenReturn(Future.failedFuture(error));
+
+        Promise<Void> startPromise = Promise.promise();
+        usageApp.start(startPromise);
+
+        startPromise.future().onComplete(testContext.failing(v -> {
+            verify(configLoader).load(any());
+            verify(rabbitMQService, never()).deploy(any(), any());
+            verify(writeUsageService, never()).deploy(any(), any());
+            verify(apiService, never()).deploy(any(), any());
+            verify(syncMessageService, never()).deploy(any(), any());
+            testContext.completeNow();
+        }));
+    }
+
+    @Test
+    public void testStopSuccess(VertxTestContext testContext) {
+        Promise<Void> stopPromise = Promise.promise();
+        usageApp.stop(stopPromise);
+
+        stopPromise.future().onComplete(testContext.succeeding(v -> {
+            verify(rabbitMQService).teardown();
+            verify(writeUsageService).teardown();
+            verify(apiService).teardown();
+            verify(syncMessageService).teardown();
+            testContext.completeNow();
+        }));
+    }
+
+    @Test
+    public void testStopFailure(VertxTestContext testContext) {
+        Throwable error = new RuntimeException("Failed to stop services");
+        when(rabbitMQService.teardown()).thenReturn(Future.failedFuture(error));
+
+        Promise<Void> stopPromise = Promise.promise();
+        usageApp.stop(stopPromise);
+
+        stopPromise.future().onComplete(testContext.failing(v -> {
+            verify(rabbitMQService).teardown();
+            verify(writeUsageService).teardown();
+            verify(apiService).teardown();
+            verify(syncMessageService).teardown();
+            testContext.completeNow();
+        }));
     }
 }
