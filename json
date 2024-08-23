@@ -1,281 +1,85 @@
-{
-  "$schema": "http://json-schema.org/draft-04/schema#",
-  "type": "object",
-  "definitions": {
-    "HostId": {
-      "type": "object",
-      "properties": {
-        "Type": {
-          "type": "string"
-        },
-        "Id": {
-          "type": "string"
+package com.usage;
+
+import com.usage.config.ConfigLoader;
+import com.usage.verticles.services.ApiService;
+import com.usage.verticles.services.RabbitMQService;
+import com.usage.verticles.services.SyncMessageService;
+import com.usage.verticles.services.VerticleService;
+import com.usage.verticles.services.WriteUsageService;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Future;
+import io.vertx.core.Promise;
+import io.vertx.core.logging.SLF4JLogDelegateFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class UsageApp extends AbstractVerticle {
+    private static final Logger LOG = LoggerFactory.getLogger(UsageApp.class);
+    private static final int INSTANCES = 2 * Runtime.getRuntime().availableProcessors();
+
+    private final List<VerticleService> services = new ArrayList<>();
+
+    public List<VerticleService> getServices() {
+        if (services.isEmpty()) {
+            services.add(RabbitMQService.getInstance(INSTANCES));
+            services.add(WriteUsageService.getInstance(INSTANCES));
+            services.add(ApiService.getInstance(INSTANCES));
+            services.add(SyncMessageService.getInstance(INSTANCES));
         }
-      },
-      "required": [
-        "Type",
-        "Id"
-      ]
-    },
-    "Feature": {
-      "type": "object",
-      "properties": {
-        "ReservationGroupName": {
-          "type": "string"
-        },
-        "UsageExpiry": {
-          "type": "integer"
-        },
-        "LastConsumeTime": {
-          "type": "integer"
-        },
-        "Count": {
-          "type": "integer"
-        },
-        "Name": {
-          "type": "string"
-        },
-        "Overdraft": {
-          "type": "integer"
-        },
-        "FeatureId": {
-          "type": "string"
-        },
-        "PartitionName": {
-          "type": "string"
-        },
-        "SelectorDictionary": {
-          "type": "object",
-          "properties": {
-            "REGION": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "REGION"
-          ]
-        },
-        "Type": {
-          "type": "string"
-        },
-        "Version": {
-          "type": "string"
-        },
-        "Reusable": {
-          "type": "boolean"
-        },
-        "LastUpdateTime": {
-          "type": "integer"
-        },
-        "TotalUsedCount": {
-          "type": "integer"
-        },
-        "IsPartial": {
-          "type": "boolean"
-        },
-        "UsageCount": {
-          "type": "integer"
-        },
-        "OverdraftUsed": {
-          "type": "integer"
-        },
-        "Reserved": {
-          "type": "integer"
-        },
-        "EntitledArticles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "EntitledArticleVersions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "ActivationIds": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "Expires": {
-          "type": "integer"
+
+        return services;
+    }
+
+    @Override
+    public void start(final Promise<Void> startPromise) {
+        configureLogging();
+        ConfigLoader.get().load(vertx)
+                .compose((jsonConfig) -> {
+                    LOG.debug("Config loaded" + jsonConfig.toString());
+
+                    return Future.all(
+                            getServices()
+                                    .stream()
+                                    .map(service -> service.deploy(vertx, jsonConfig))
+                                    .collect(Collectors.toList())
+                    );
+                })
+                .onSuccess(resul -> {
+                    LOG.info("Service deployment completed");
+                    startPromise.complete();
+                })
+                .onFailure((err) -> {
+                    LOG.error("Unable to deploy services.", err);
+                    startPromise.fail(err);
+                });
+
+        //register hook for when jvm shuts down to correctly stop all verticles
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> vertx.close()));
+    }
+
+    @Override
+    public void stop(Promise<Void> stopPromise) {
+        Future.all(getServices()
+                        .stream()
+                        .map(VerticleService::teardown)
+                        .collect(Collectors.toList())
+                )
+                .onSuccess((r) -> stopPromise.complete())
+                .onFailure(e -> {
+                    LOG.error("Failed to stop the services", e);
+                    stopPromise.fail(e);
+                });
+    }
+
+    private void configureLogging() {
+        // set vertx logger delegate factory to slf4j
+        final String logFactory = System.getProperty("org.vertx.logger-delegate-factory-class-name");
+        if (logFactory == null) {
+            System.setProperty("org.vertx.logger-delegate-factory-class-name", SLF4JLogDelegateFactory.class.getName());
         }
-      },
-      "required": [
-        "ReservationGroupName",
-        "Count",
-        "Name",
-        "Overdraft",
-        "FeatureId",
-        "PartitionName",
-        "Type",
-        "Version",
-        "Reusable",
-        "TotalUsedCount",
-        "IsPartial",
-        "UsageCount",
-        "OverdraftUsed",
-        "Reserved",
-        "EntitledArticles",
-        "EntitledArticleVersions",
-        "ActivationIds"
-      ]
     }
-  },
-  "properties": {
-    "HostUUID": {
-      "type": "string"
-    },
-    "IsServer": {
-      "type": "boolean"
-    },
-    "TenantId": {
-      "type": "string"
-    },
-    "RenewInterval": {
-      "type": "integer"
-    },
-    "LastMessagePublishedTime": {
-      "type": "integer"
-    },
-    "BorrowInterval": {
-      "type": "integer"
-    },
-    "Vendor": {
-      "type": "string"
-    },
-    "SourceHostId": {
-      "$ref": "#/definitions/HostId"
-    },
-    "Clients": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "RequestOperation": {
-            "type": "string"
-          },
-          "VmInfo": {
-            "type": "object",
-            "properties": {
-              "vmInfoKey": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "vmInfoKey"
-            ]
-          },
-          "MachineType": {
-            "type": "string"
-          },
-          "RequestHostId": {
-            "$ref": "#/definitions/HostId"
-          },
-          "ServedStatus": {
-            "type": "string"
-          },
-          "MeteredFeatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/Feature"
-            }
-          },
-          "EnterpriseId": {
-            "type": "string"
-          },
-          "IsAllowDuplicateClientEnabled": {
-            "type": "boolean"
-          },
-          "ClientHostId": {
-            "$ref": "#/definitions/HostId"
-          },
-          "ServerId": {
-            "$ref": "#/definitions/HostId"
-          },
-          "LastUpdateTime": {
-            "type": "integer"
-          },
-          "ConcurrentFeatures": {
-            "type": "array",
-            "items": {
-              "$ref": "#/definitions/Feature"
-            }
-          },
-          "IsIncremental": {
-            "type": "boolean"
-          },
-          "ServerName": {
-            "type": "string"
-          },
-          "AcquisitionId": {
-            "type": "string"
-          },
-          "CorrelationId": {
-            "type": "string"
-          },
-          "VendorDictionary": {
-            "type": "object",
-            "properties": {
-              "clientKey": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "clientKey"
-            ]
-          },
-          "UUID": {
-            "type": "string"
-          },
-          "CloneSuspect": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "RequestOperation",
-          "VmInfo",
-          "MachineType",
-          "RequestHostId",
-          "ServedStatus",
-          "MeteredFeatures",
-          "EnterpriseId",
-          "IsAllowDuplicateClientEnabled",
-          "ClientHostId",
-          "ServerId",
-          "LastUpdateTime",
-          "ConcurrentFeatures",
-          "IsIncremental",
-          "ServerName",
-          "AcquisitionId",
-          "CorrelationId",
-          "VendorDictionary",
-          "UUID",
-          "CloneSuspect"
-        ]
-      }
-    },
-    "TargetId": {
-      "$ref": "#/definitions/HostId"
-    },
-    "IdentityName": {
-      "type": "string"
-    }
-  },
-  "required": [
-    "HostUUID",
-    "IsServer",
-    "TenantId",
-    "RenewInterval",
-    "LastMessagePublishedTime",
-    "BorrowInterval",
-    "Vendor",
-    "SourceHostId",
-    "Clients",
-    "TargetId",
-    "IdentityName"
-  ]
 }
