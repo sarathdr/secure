@@ -1,138 +1,77 @@
-import com.usage.config.ConfigLoader;
-import com.usage.verticles.services.ApiService;
-import com.usage.verticles.services.RabbitMQService;
-import com.usage.verticles.services.SyncMessageService;
-import com.usage.verticles.services.VerticleService;
-import com.usage.verticles.services.WriteUsageService;
+package com.usage.verticles.services;
+
+import com.usage.annotations.ExcludeFromJacocoGeneratedReport;
+import com.usage.common.AppConfig;
+import com.usage.verticles.WriteUsageVerticle;
+import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import io.vertx.junit5.VertxExtension;
-import io.vertx.junit5.VertxTestContext;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3AsyncClient;
+import software.amazon.awssdk.services.s3.S3AsyncClientBuilder;
 
-import java.util.List;
+import java.net.URI;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+public class WriteUsageService extends DeployVerticleService {
+    private static final Logger LOG = LoggerFactory.getLogger(WriteUsageService.class);
+    private static final String SERVICE_NAME = "WriteUsageService";
 
-@ExtendWith(VertxExtension.class)
-public class UsageAppTest {
+    private static WriteUsageService INSTANCE;
 
-    @Mock
-    private ConfigLoader configLoader;
-
-    @Mock
-    private RabbitMQService rabbitMQService;
-
-    @Mock
-    private WriteUsageService writeUsageService;
-
-    @Mock
-    private ApiService apiService;
-
-    @Mock
-    private SyncMessageService syncMessageService;
-
-    @Mock
-    private Vertx vertx;
-
-    @InjectMocks
-    private UsageApp usageApp;
-
-    @BeforeEach
-    public void setup() {
-        MockitoAnnotations.openMocks(this);
-
-        when(rabbitMQService.deploy(any(), any())).thenReturn(Future.succeededFuture());
-        when(writeUsageService.deploy(any(), any())).thenReturn(Future.succeededFuture());
-        when(apiService.deploy(any(), any())).thenReturn(Future.succeededFuture());
-        when(syncMessageService.deploy(any(), any())).thenReturn(Future.succeededFuture());
-
-        when(rabbitMQService.teardown()).thenReturn(Future.succeededFuture());
-        when(writeUsageService.teardown()).thenReturn(Future.succeededFuture());
-        when(apiService.teardown()).thenReturn(Future.succeededFuture());
-        when(syncMessageService.teardown()).thenReturn(Future.succeededFuture());
+    private WriteUsageService(final int instances) {
+        super(instances);
     }
 
-    @Test
-    public void testGetServices() {
-        List<VerticleService> services = usageApp.getServices();
-        assertEquals(4, services.size());
-        verifyNoMoreInteractions(configLoader);  // Ensure no interaction with ConfigLoader for this method
+    public static WriteUsageService getInstance(final int instances) {
+        if (INSTANCE == null) {
+            INSTANCE = new WriteUsageService(instances);
+        }
+
+        return INSTANCE;
     }
 
-    @Test
-    public void testStartSuccess(VertxTestContext testContext) {
-        JsonObject mockConfig = new JsonObject();
-        when(configLoader.load(any())).thenReturn(Future.succeededFuture(mockConfig));
+    @Override
+    public Future<Boolean> deploy(Vertx vertx, JsonObject config) {
 
-        Promise<Void> startPromise = Promise.promise();
-        usageApp.start(startPromise);
-
-        startPromise.future().onComplete(testContext.succeeding(v -> {
-            verify(configLoader).load(any());
-            verify(rabbitMQService).deploy(any(), eq(mockConfig));
-            verify(writeUsageService).deploy(any(), eq(mockConfig));
-            verify(apiService).deploy(any(), eq(mockConfig));
-            verify(syncMessageService).deploy(any(), eq(mockConfig));
-            testContext.completeNow();
-        }));
+        return vertx.deployVerticle(
+                () -> WriteUsageVerticle.create(createAsyncS3Client(config)),
+                new DeploymentOptions()
+                        .setConfig(config)
+                        .setInstances(getInstanceCount())
+        ).compose(
+                result -> {
+                    LOG.info("{} successfully deployed", getServiceName());
+                    setServiceStatus(ServiceStatus.ACTIVE);
+                    return Future.succeededFuture(true);
+                }
+        );
     }
 
-    @Test
-    public void testStartFailure(VertxTestContext testContext) {
-        Throwable error = new RuntimeException("Failed to load config");
-        when(configLoader.load(any())).thenReturn(Future.failedFuture(error));
 
-        Promise<Void> startPromise = Promise.promise();
-        usageApp.start(startPromise);
+    @ExcludeFromJacocoGeneratedReport
+    private S3AsyncClient createAsyncS3Client(final JsonObject config) {
+        final String region = config.getString(AppConfig.AWS_REGION);
+        final String s3Endpoint = config.getString(AppConfig.S3_ENDPOINT);
 
-        startPromise.future().onComplete(testContext.failing(v -> {
-            verify(configLoader).load(any());
-            verify(rabbitMQService, never()).deploy(any(), any());
-            verify(writeUsageService, never()).deploy(any(), any());
-            verify(apiService, never()).deploy(any(), any());
-            verify(syncMessageService, never()).deploy(any(), any());
-            testContext.completeNow();
-        }));
+        final S3AsyncClientBuilder builder = S3AsyncClient.builder()
+                .forcePathStyle(true);
+        if (region != null && !region.isEmpty()) {
+            builder.region(Region.of(region));
+        }
+
+        if (s3Endpoint != null && !s3Endpoint.isEmpty()) {
+            builder.endpointOverride(URI.create(s3Endpoint));
+        }
+
+        return builder.build();
     }
 
-    @Test
-    public void testStopSuccess(VertxTestContext testContext) {
-        Promise<Void> stopPromise = Promise.promise();
-        usageApp.stop(stopPromise);
 
-        stopPromise.future().onComplete(testContext.succeeding(v -> {
-            verify(rabbitMQService).teardown();
-            verify(writeUsageService).teardown();
-            verify(apiService).teardown();
-            verify(syncMessageService).teardown();
-            testContext.completeNow();
-        }));
-    }
-
-    @Test
-    public void testStopFailure(VertxTestContext testContext) {
-        Throwable error = new RuntimeException("Failed to stop services");
-        when(rabbitMQService.teardown()).thenReturn(Future.failedFuture(error));
-
-        Promise<Void> stopPromise = Promise.promise();
-        usageApp.stop(stopPromise);
-
-        stopPromise.future().onComplete(testContext.failing(v -> {
-            verify(rabbitMQService).teardown();
-            verify(writeUsageService).teardown();
-            verify(apiService).teardown();
-            verify(syncMessageService).teardown();
-            testContext.completeNow();
-        }));
+    @Override
+    public String getServiceName() {
+        return SERVICE_NAME;
     }
 }
