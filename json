@@ -1,104 +1,57 @@
-import com.usage.verticles.WriteUsageVerticle;
+package com.usage.verticles.services;
+
+import com.usage.verticles.ServerVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
+import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
-import software.amazon.awssdk.services.s3.S3AsyncClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import java.util.function.Supplier;
 
-@ExtendWith(MockitoExtension.class)
-public class WriteUsageServiceTest {
+public class ApiService extends DeployVerticleService {
+    private static final Logger LOG = LoggerFactory.getLogger(ApiService.class);
+    private static final String SERVICE_NAME = "Server";
 
-    @Mock
-    private Vertx vertx;
+    private static ApiService INSTANCE;
 
-    @Mock
-    private S3AsyncClient s3AsyncClient;
-
-    @Mock
-    private JsonObject config;
-
-    @Mock
-    private WriteUsageVerticle writeUsageVerticle;
-
-    @InjectMocks
-    private WriteUsageService writeUsageService;
-
-    private MockedStatic<WriteUsageVerticle> writeUsageVerticleMockedStatic;
-
-    @BeforeEach
-    public void setup() {
-        writeUsageVerticleMockedStatic = Mockito.mockStatic(WriteUsageVerticle.class);
-        writeUsageVerticleMockedStatic.when(() -> WriteUsageVerticle.create(any(S3AsyncClient.class)))
-                .thenReturn(writeUsageVerticle);
+    private ApiService(final int instances) {
+        super(instances);
     }
 
-    @Test
-    public void testGetInstance() {
-        WriteUsageService instance1 = WriteUsageService.getInstance(5);
-        WriteUsageService instance2 = WriteUsageService.getInstance(10);
-
-        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
-        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
-    }
-
-    @Test
-    public void testDeploySuccess() {
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.succeededFuture("deploymentID"));
-
-        Future<Boolean> future = writeUsageService.deploy(vertx, config);
-
-        assertTrue(future.succeeded());
-        assertEquals(ServiceStatus.ACTIVE, writeUsageService.getServiceStatus());
-        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
-        writeUsageVerticleMockedStatic.verify(() -> WriteUsageVerticle.create(any(S3AsyncClient.class)), times(1));
-    }
-
-    @Test
-    public void testDeployFailure() {
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.failedFuture(new RuntimeException("Deployment failed")));
-
-        Future<Boolean> future = writeUsageService.deploy(vertx, config);
-
-        assertTrue(future.failed());
-        assertNotEquals(ServiceStatus.ACTIVE, writeUsageService.getServiceStatus());
-        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
-    }
-
-    @Test
-    public void testCreateAsyncS3Client() {
-        when(config.getString(AppConfig.AWS_REGION)).thenReturn("us-west-2");
-        when(config.getString(AppConfig.S3_ENDPOINT)).thenReturn("http://localhost:4566");
-
-        // Testing the private method createAsyncS3Client via reflection
-        S3AsyncClient client = invokePrivateCreateAsyncS3Client(config);
-
-        assertNotNull(client);
-        // Further assertions can be made by inspecting the client object if needed
-    }
-
-    private S3AsyncClient invokePrivateCreateAsyncS3Client(JsonObject config) {
-        try {
-            // Using reflection to access the private method
-            var method = WriteUsageService.class.getDeclaredMethod("createAsyncS3Client", JsonObject.class);
-            method.setAccessible(true);
-            return (S3AsyncClient) method.invoke(writeUsageService, config);
-        } catch (Exception e) {
-            fail("Failed to invoke private method createAsyncS3Client");
-            return null;
+    public static ApiService getInstance(final int instances) {
+        if (INSTANCE == null) {
+            INSTANCE = new ApiService(instances);
         }
+
+        return INSTANCE;
     }
+
+    public Supplier<Verticle> getVerticle() {
+        return ServerVerticle::new;
+    }
+
+    @Override
+    public Future<Boolean> deploy(Vertx vertx, JsonObject config) {
+        return vertx.deployVerticle(
+                getVerticle(),
+                new DeploymentOptions()
+                        .setConfig(config)
+                        .setInstances(getInstanceCount())
+        ).compose(
+                result -> {
+                    LOG.info("{} successfully deployed", getServiceName());
+                    setStatus(ServiceStatus.ACTIVE);
+                    return Future.succeededFuture(true);
+                }
+        );
+    }
+
+    @Override
+    public String getServiceName() {
+        return SERVICE_NAME;
+    }
+
 }
