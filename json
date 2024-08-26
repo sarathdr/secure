@@ -3,13 +3,10 @@ package com.usage.verticles.services;
 import com.usage.verticles.ServerVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
-import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.function.Supplier;
 
 public class ApiService extends DeployVerticleService {
     private static final Logger LOG = LoggerFactory.getLogger(ApiService.class);
@@ -29,14 +26,11 @@ public class ApiService extends DeployVerticleService {
         return INSTANCE;
     }
 
-    public Supplier<Verticle> getVerticle() {
-        return ServerVerticle::new;
-    }
 
     @Override
     public Future<Boolean> deploy(Vertx vertx, JsonObject config) {
         return vertx.deployVerticle(
-                getVerticle(),
+                ServerVerticle::create,
                 new DeploymentOptions()
                         .setConfig(config)
                         .setInstances(getInstanceCount())
