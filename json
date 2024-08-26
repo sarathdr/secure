@@ -1,77 +1,170 @@
-import com.usage.verticles.ServerVerticle;
+package com.usage.verticles.services;
+
+import com.rabbitmq.client.BuiltinExchangeType;
+import com.usage.annotations.ExcludeFromJacocoGeneratedReport;
+import com.usage.common.AppConfig;
+import com.usage.verticles.RabbitMQConsumerVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
+import io.vertx.rabbitmq.RabbitMQClient;
+import io.vertx.rabbitmq.RabbitMQOptions;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import java.text.MessageFormat;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-@ExtendWith(MockitoExtension.class)
-public class ApiServiceTest {
+public class RabbitMQService extends DeployVerticleService {
+    private static final Logger LOG = LoggerFactory.getLogger(RabbitMQService.class);
+    private static final String SERVICE_NAME = "RabbitMQ";
+    private static final int DEFAULT_RECOVERY_INTERVAL = 5000;
+    private static final String DELIMITER = ";";
+    private static final String EXCHANGE_HEADER_X_MATCH_KEY = "x-match";
+    private static final String EXCHANGE_HEADER_X_MATCH_VALUE = "all";
+    private static final String QUEUE_NAME_PATTERN = "{0}.{1}";
+    private RabbitMQClient rabbitMQClient;
 
-    @Mock
-    private Vertx vertx;
+    private static RabbitMQService INSTANCE;
 
-    @Mock
-    private JsonObject config;
-
-    @InjectMocks
-    private ApiService apiService;
-
-    private MockedStatic<ServerVerticle> serverVerticleMockedStatic;
-
-    @BeforeEach
-    public void setup() {
-        serverVerticleMockedStatic = Mockito.mockStatic(ServerVerticle.class);
+    private RabbitMQService(int instances) {
+        super(instances);
     }
 
-    @Test
-    public void testGetInstance() {
-        ApiService instance1 = ApiService.getInstance(5);
-        ApiService instance2 = ApiService.getInstance(10);
+    public static RabbitMQService getInstance(final int instances) {
+        if (INSTANCE == null) {
+            INSTANCE = new RabbitMQService(instances);
+        }
 
-        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
-        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
+        return INSTANCE;
     }
 
-    @Test
-    public void testDeploySuccess() {
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.succeededFuture("deploymentID"));
+    @Override
+    public Future<Boolean> deploy(final Vertx vertx, final JsonObject config) {
+        rabbitMQClient = RabbitMQClient.create(vertx, createRabbitMqOptions(config));
+        final String exchangeName = config.getString(AppConfig.RABBITMQ_EXCHANGE_NAME);
 
-        Future<Boolean> future = apiService.deploy(vertx, config);
+        return rabbitMQClient.start()
+                .compose((result) -> {
+                    LOG.info("Connected to rabbitmq");
 
-        assertTrue(future.succeeded());
-        assertEquals(ServiceStatus.ACTIVE, apiService.getServiceStatus());
-        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
-        serverVerticleMockedStatic.verify(ServerVerticle::create, times(1));
+                    return rabbitMQClient.exchangeDeclare(
+                            exchangeName,
+                            BuiltinExchangeType.HEADERS.getType(),
+                            true,
+                            false
+                    );
+                }).compose(declaredExchange -> {
+                    LOG.info("Declared exchange {}", exchangeName);
+
+                    return Future.all(createQueueAndDeployConsumer(vertx, config));
+                }).compose(deploy -> {
+                    if (deploy.succeeded()) {
+                        LOG.info("{} successfully deployed", getServiceName());
+                        setStatus(ServiceStatus.ACTIVE);
+
+                        return Future.succeededFuture(true);
+                    } else {
+                        LOG.error("RabbitMQ failed to initialise ", deploy.cause());
+
+                        return Future.failedFuture(deploy.cause());
+                    }
+                });
     }
 
-    @Test
-    public void testDeployFailure() {
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.failedFuture(new RuntimeException("Deployment failed")));
-
-        Future<Boolean> future = apiService.deploy(vertx, config);
-
-        assertTrue(future.failed());
-        assertNotEquals(ServiceStatus.ACTIVE, apiService.getServiceStatus());
-        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
-        serverVerticleMockedStatic.verify(ServerVerticle::create, times(1));
+    @Override
+    public String getServiceName() {
+        return SERVICE_NAME;
     }
 
-    @Test
-    public void testGetServiceName() {
-        assertEquals("Server", apiService.getServiceName());
+    @Override
+    public ServiceStatus getStatus() {
+        if (getStatus() == ServiceStatus.ACTIVE
+                && rabbitMQClient != null
+                && rabbitMQClient.isConnected()) {
+            return ServiceStatus.ACTIVE;
+        }
+
+        return ServiceStatus.INACTIVE;
+    }
+
+    private List<Future<String>> createQueueAndDeployConsumer(final Vertx vertx, final JsonObject config) {
+
+        final String prefix = config.getString(AppConfig.RABBITMQ_QUEUE_NAME_PREFIX);
+        final String exchangeName = config.getString(AppConfig.RABBITMQ_EXCHANGE_NAME);
+        final String headerKey = config.getString(AppConfig.RABBITMQ_SILO_HEADER_KEY);
+        final String queueNames = config.getString(AppConfig.RABBITMQ_QUEUES);
+
+        return Arrays.stream(queueNames.split(DELIMITER))
+                .map(queueName -> {
+                    final String queue = MessageFormat.format(QUEUE_NAME_PATTERN, prefix, queueName);
+
+                    final Map<String, Object> bindingArgs = new HashMap<>();
+                    bindingArgs.put(EXCHANGE_HEADER_X_MATCH_KEY, EXCHANGE_HEADER_X_MATCH_VALUE);
+                    bindingArgs.put(headerKey, queueName);
+
+                    return rabbitMQClient.queueDeclare(queue, true, false, false)
+                            .compose(declareOk -> rabbitMQClient.queueBind(
+                                    queue,
+                                    exchangeName,
+                                    "",
+                                    bindingArgs
+                            ))
+                            .compose(
+                                    bindOk -> {
+                                        LOG.info("Deploying consumers for queue {}", queue);
+
+                                        return vertx.deployVerticle(
+                                                RabbitMQConsumerVerticle.create(rabbitMQClient, queue),
+                                                new DeploymentOptions()
+                                                        .setConfig(config)
+                                                        .setInstances(getInstanceCount())
+                                        );
+                                    });
+
+                })
+                .collect(Collectors.toList());
+
+    }
+
+    @ExcludeFromJacocoGeneratedReport
+    private RabbitMQOptions createRabbitMqOptions(final JsonObject jsonConfig) {
+        final RabbitMQOptions config = new RabbitMQOptions();
+        config.setHost(jsonConfig.getString(AppConfig.RABBITMQ_HOST))
+                .setUser(jsonConfig.getString(AppConfig.RABBITMQ_USERNAME))
+                .setPassword(jsonConfig.getString(AppConfig.RABBITMQ_PASSWORD))
+                .setPort(jsonConfig.getInteger(AppConfig.RABBITMQ_PORT))
+                .setNetworkRecoveryInterval(
+                        jsonConfig.getInteger(AppConfig.RABBITMQ_RECOVERY_INTERVAL, DEFAULT_RECOVERY_INTERVAL)
+                )
+                .setReconnectAttempts(0)
+                .setAutomaticRecoveryEnabled(true);
+
+        final String virtualHost = jsonConfig.getString(AppConfig.RABBITMQ_VHOST, null);
+        if (!StringUtils.isEmpty(virtualHost)) {
+            config.setVirtualHost(virtualHost);
+        }
+
+        if (jsonConfig.getBoolean(AppConfig.RABBITMQ_SSL_ENABLED)) {
+            LOG.debug("RabbitMQ SSL enabled");
+            config.setSsl(true);
+        }
+
+        return config;
+    }
+
+    @Override
+    public Future<Void> teardown() {
+        if (rabbitMQClient != null && rabbitMQClient.isConnected()) {
+            return rabbitMQClient.stop();
+        }
+
+        return super.teardown();
     }
 }
