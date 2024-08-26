@@ -1,51 +1,77 @@
-package com.usage.verticles.services;
-
 import com.usage.verticles.ServerVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-public class ApiService extends DeployVerticleService {
-    private static final Logger LOG = LoggerFactory.getLogger(ApiService.class);
-    private static final String SERVICE_NAME = "Server";
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-    private static ApiService INSTANCE;
+@ExtendWith(MockitoExtension.class)
+public class ApiServiceTest {
 
-    private ApiService(final int instances) {
-        super(instances);
+    @Mock
+    private Vertx vertx;
+
+    @Mock
+    private JsonObject config;
+
+    @InjectMocks
+    private ApiService apiService;
+
+    private MockedStatic<ServerVerticle> serverVerticleMockedStatic;
+
+    @BeforeEach
+    public void setup() {
+        serverVerticleMockedStatic = Mockito.mockStatic(ServerVerticle.class);
     }
 
-    public static ApiService getInstance(final int instances) {
-        if (INSTANCE == null) {
-            INSTANCE = new ApiService(instances);
-        }
+    @Test
+    public void testGetInstance() {
+        ApiService instance1 = ApiService.getInstance(5);
+        ApiService instance2 = ApiService.getInstance(10);
 
-        return INSTANCE;
+        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
+        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
     }
 
+    @Test
+    public void testDeploySuccess() {
+        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
+                .thenReturn(Future.succeededFuture("deploymentID"));
 
-    @Override
-    public Future<Boolean> deploy(Vertx vertx, JsonObject config) {
-        return vertx.deployVerticle(
-                ServerVerticle::create,
-                new DeploymentOptions()
-                        .setConfig(config)
-                        .setInstances(getInstanceCount())
-        ).compose(
-                result -> {
-                    LOG.info("{} successfully deployed", getServiceName());
-                    setStatus(ServiceStatus.ACTIVE);
-                    return Future.succeededFuture(true);
-                }
-        );
+        Future<Boolean> future = apiService.deploy(vertx, config);
+
+        assertTrue(future.succeeded());
+        assertEquals(ServiceStatus.ACTIVE, apiService.getServiceStatus());
+        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
+        serverVerticleMockedStatic.verify(ServerVerticle::create, times(1));
     }
 
-    @Override
-    public String getServiceName() {
-        return SERVICE_NAME;
+    @Test
+    public void testDeployFailure() {
+        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
+                .thenReturn(Future.failedFuture(new RuntimeException("Deployment failed")));
+
+        Future<Boolean> future = apiService.deploy(vertx, config);
+
+        assertTrue(future.failed());
+        assertNotEquals(ServiceStatus.ACTIVE, apiService.getServiceStatus());
+        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
+        serverVerticleMockedStatic.verify(ServerVerticle::create, times(1));
     }
 
+    @Test
+    public void testGetServiceName() {
+        assertEquals("Server", apiService.getServiceName());
+    }
 }
