@@ -1,149 +1,102 @@
-import com.usage.common.AppConfig;
-import com.usage.verticles.SyncMessageVerticle;
-import io.vertx.core.DeploymentOptions;
-import io.vertx.core.Future;
-import io.vertx.core.Verticle;
-import io.vertx.core.Vertx;
+package com.usage.verticles;
+
+import com.usage.common.Constants;
+import com.usage.common.EventBusAddresses;
+import com.usage.handlers.rest.RequestHandler;
+import com.usage.handlers.rest.services.DbSignatureValidator;
+import com.usage.handlers.rest.services.SignatureValidator;
+import com.usage.utils.UsageDataMapper;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.Handler;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
+import io.vertx.core.tracing.TracingPolicy;
 import io.vertx.jdbcclient.JDBCPool;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
-import java.util.function.Supplier;
+import java.util.Base64;
+import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+public class SyncMessageVerticle extends AbstractVerticle {
+    private static final Logger LOG = LoggerFactory.getLogger(SyncMessageVerticle.class);
 
-@ExtendWith(MockitoExtension.class)
-public class SyncMessageServiceTest {
+    private EventBus eventBus;
+    private final SignatureValidator validator;
 
-    @Mock
-    private Vertx vertx;
-
-    @Mock
-    private JsonObject config;
-
-    @Mock
-    private JDBCPool jdbcPool;
-
-    @InjectMocks
-    private SyncMessageService syncMessageService;
-
-    private MockedStatic<JDBCPool> jdbcPoolMockedStatic;
-    private MockedStatic<SyncMessageVerticle> syncMessageVerticleMockedStatic;
-
-    @BeforeEach
-    public void setup() {
-        jdbcPoolMockedStatic = Mockito.mockStatic(JDBCPool.class);
-        syncMessageVerticleMockedStatic = Mockito.mockStatic(SyncMessageVerticle.class);
-
-        jdbcPoolMockedStatic.when(() -> JDBCPool.pool(any(Vertx.class), any(JsonObject.class)))
-                .thenReturn(jdbcPool);
+    private SyncMessageVerticle(final JDBCPool connectionPool) {
+        validator = new DbSignatureValidator(connectionPool);
     }
 
-    @Test
-    public void testGetInstance() {
-        SyncMessageService instance1 = SyncMessageService.getInstance(5);
-        SyncMessageService instance2 = SyncMessageService.getInstance(10);
-
-        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
-        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
+    public static SyncMessageVerticle create(final JDBCPool connectionPool) {
+        return new SyncMessageVerticle(connectionPool);
     }
 
-    @Test
-    public void testDeploySuccess() {
-        when(vertx.deployVerticle(any(Supplier.class), any(DeploymentOptions.class)))
-                .thenReturn(Future.succeededFuture("deploymentID"));
-
-        syncMessageVerticleMockedStatic.when(() -> SyncMessageVerticle.create(any(JDBCPool.class)))
-                .thenReturn(mock(SyncMessageVerticle.class));
-
-        Future<Boolean> future = syncMessageService.deploy(vertx, config);
-
-        assertTrue(future.succeeded());
-        assertEquals(ServiceStatus.ACTIVE, syncMessageService.getServiceStatus());
-        verify(vertx).deployVerticle(any(Supplier.class), any(DeploymentOptions.class));
-        syncMessageVerticleMockedStatic.verify(() -> SyncMessageVerticle.create(any(JDBCPool.class)), times(1));
+    @Override
+    public void start() throws Exception {
+        super.start();
+        eventBus = vertx.eventBus();
+        eventBus.consumer(EventBusAddresses.PROCESS_SYNC_MESSAGE, processUsageData());
     }
 
-    @Test
-    public void testDeployFailure() {
-        when(vertx.deployVerticle(any(Supplier.class), any(DeploymentOptions.class)))
-                .thenReturn(Future.failedFuture(new RuntimeException("Deployment failed")));
+    protected Handler<Message<Buffer>> processUsageData() {
 
-        syncMessageVerticleMockedStatic.when(() -> SyncMessageVerticle.create(any(JDBCPool.class)))
-                .thenReturn(mock(SyncMessageVerticle.class));
+        return (message) -> {
+            final Buffer body = message.body();
+            final JsonObject syncMessage = new JsonObject(body);
+            final String correlationId = UsageDataMapper.getCorrelationId(syncMessage);
 
-        Future<Boolean> future = syncMessageService.deploy(vertx, config);
+            MDC.put(Constants.CORRELATION_ID, correlationId);
 
-        assertTrue(future.failed());
-        assertNotEquals(ServiceStatus.ACTIVE, syncMessageService.getServiceStatus());
-        verify(vertx).deployVerticle(any(Supplier.class), any(DeploymentOptions.class));
-        syncMessageVerticleMockedStatic.verify(() -> SyncMessageVerticle.create(any(JDBCPool.class)), times(1));
-    }
+            LOG.trace("Validating usage request");
+            LOG.debug("Processing usage request: {}", correlationId);
 
-    @Test
-    public void testCreateJdbcConnectionPool() {
-        when(config.getString(AppConfig.DB_HOST)).thenReturn("localhost");
-        when(config.getString(AppConfig.DB_PORT, "1433")).thenReturn("1433");
-        when(config.getString(AppConfig.DB_NAME)).thenReturn("testdb");
-        when(config.getBoolean(AppConfig.DB_ENCRYPT, false)).thenReturn(false);
-        when(config.getString(AppConfig.DB_USERNAME)).thenReturn("user");
-        when(config.getString(AppConfig.DB_PASSWORD)).thenReturn("pass");
-        when(config.getInteger(AppConfig.DB_MAX_POOL_SIZE)).thenReturn(10);
+            final byte[] signature = Base64
+                    .getDecoder()
+                    .decode(message.headers().get(RequestHandler.SIGNATURE_HEADER));
 
-        JDBCPool pool = invokePrivateCreateJdbcConnectionPool(vertx, config);
+            final String tenantId = UsageDataMapper.getTenantId(syncMessage);
+            final String instanceId = UsageDataMapper.getInstanceId(syncMessage);
 
-        assertNotNull(pool);
-        verify(config).getString(AppConfig.DB_HOST);
-        verify(config).getString(AppConfig.DB_PORT, "1433");
-        verify(config).getString(AppConfig.DB_NAME);
-        verify(config).getBoolean(AppConfig.DB_ENCRYPT, false);
-        verify(config).getString(AppConfig.DB_USERNAME);
-        verify(config).getString(AppConfig.DB_PASSWORD);
-        verify(config).getInteger(AppConfig.DB_MAX_POOL_SIZE);
-    }
+            validator.validateSignature(tenantId, instanceId, signature, body.getBytes()).onSuccess(valid -> {
+                if (!valid) {
+                    LOG.debug("Invalid signature");
+                    message.fail(400, "Invalid signature");
+                    return;
+                }
 
-    @Test
-    public void testTeardownWithConnection() {
-        when(jdbcPool.close()).thenReturn(Future.succeededFuture());
+                final List<JsonObject> usageList = UsageDataMapper.map(syncMessage);
+                if (!usageList.isEmpty()) {
+                    eventBus.send(
+                            EventBusAddresses.USAGE_REQUEST,
+                            UsageDataMapper.convertLineOfStrings(usageList),
+                            new DeliveryOptions()
+                                    .setTracingPolicy(TracingPolicy.PROPAGATE)
+                                    .addHeader(Constants.CORRELATION_ID, correlationId)
+                    );
+                } else {
+                    LOG.warn("No usage data {}", syncMessage);
+                }
 
-        syncMessageService.deploy(vertx, config).result(); // initialize pool
+                LOG.info("Number of processed messages {}", usageList.size());
+                final var response = new JsonObject()
+                        .put(Constants.CORRELATION_ID, correlationId)
+                        .put(Constants.TENANT_ID, tenantId)
+                        .put(Constants.INSTANCE_ID, instanceId)
+                        .put(Constants.PROCESSED_USAGES, usageList.size());
 
-        Future<Void> future = syncMessageService.teardown();
+                message.reply(response);
 
-        assertTrue(future.succeeded());
-        verify(jdbcPool).close();
-    }
-
-    @Test
-    public void testTeardownWithoutConnection() {
-        Future<Void> future = syncMessageService.teardown();
-
-        assertTrue(future.succeeded());
-        verify(jdbcPool, never()).close();
-    }
-
-    @Test
-    public void testGetServiceName() {
-        assertEquals("SyncMessageProcessor", syncMessageService.getServiceName());
-    }
-
-    private JDBCPool invokePrivateCreateJdbcConnectionPool(Vertx vertx, JsonObject config) {
-        try {
-            var method = SyncMessageService.class.getDeclaredMethod("createJdbcConnectionPool", Vertx.class, JsonObject.class);
-            method.setAccessible(true);
-            return (JDBCPool) method.invoke(syncMessageService, vertx, config);
-        } catch (Exception e) {
-            fail("Failed to invoke private method createJdbcConnectionPool");
-            return null;
-        }
+            }).onFailure(failed -> {
+                LOG.warn("Failed to validate the message {}", failed.getMessage());
+                message.fail(500, failed.getMessage());
+            }).onComplete((result) -> {
+                MDC.remove(Constants.CORRELATION_ID);
+            });
+        };
     }
 }
