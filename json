@@ -1,98 +1,149 @@
-package com.usage.verticles.services;
-
 import com.usage.common.AppConfig;
 import com.usage.verticles.SyncMessageVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
-import io.vertx.core.ThreadingModel;
 import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.jdbcclient.JDBCPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.text.MessageFormat;
 import java.util.function.Supplier;
 
-public class SyncMessageService extends DeployVerticleService {
-    private static final Logger LOG = LoggerFactory.getLogger(SyncMessageService.class);
-    private static final String SERVICE_NAME = "SyncMessageProcessor";
-    private static final int WORKER_POOL_SIZE = 15;
-    private static final String WORKER_POOL_NAME = "SyncMessageProcessorPool";
-    private static final String JDBC_URL_PATTERN = "jdbc:sqlserver://{0}:{1};databaseName={2};encrypt={3}";
-    private static final String DEFAULT_DB_PORT = "1433";
-    private static SyncMessageService INSTANCE;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(MockitoExtension.class)
+public class SyncMessageServiceTest {
+
+    @Mock
+    private Vertx vertx;
+
+    @Mock
+    private JsonObject config;
+
+    @Mock
     private JDBCPool jdbcPool;
 
-    private SyncMessageService(final int instances) {
-        super(instances);
+    @InjectMocks
+    private SyncMessageService syncMessageService;
+
+    private MockedStatic<JDBCPool> jdbcPoolMockedStatic;
+    private MockedStatic<SyncMessageVerticle> syncMessageVerticleMockedStatic;
+
+    @BeforeEach
+    public void setup() {
+        jdbcPoolMockedStatic = Mockito.mockStatic(JDBCPool.class);
+        syncMessageVerticleMockedStatic = Mockito.mockStatic(SyncMessageVerticle.class);
+
+        jdbcPoolMockedStatic.when(() -> JDBCPool.pool(any(Vertx.class), any(JsonObject.class)))
+                .thenReturn(jdbcPool);
     }
 
-    public static SyncMessageService getInstance(final int instances) {
-        if (INSTANCE == null) {
-            INSTANCE = new SyncMessageService(instances);
+    @Test
+    public void testGetInstance() {
+        SyncMessageService instance1 = SyncMessageService.getInstance(5);
+        SyncMessageService instance2 = SyncMessageService.getInstance(10);
+
+        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
+        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
+    }
+
+    @Test
+    public void testDeploySuccess() {
+        when(vertx.deployVerticle(any(Supplier.class), any(DeploymentOptions.class)))
+                .thenReturn(Future.succeededFuture("deploymentID"));
+
+        syncMessageVerticleMockedStatic.when(() -> SyncMessageVerticle.create(any(JDBCPool.class)))
+                .thenReturn(mock(SyncMessageVerticle.class));
+
+        Future<Boolean> future = syncMessageService.deploy(vertx, config);
+
+        assertTrue(future.succeeded());
+        assertEquals(ServiceStatus.ACTIVE, syncMessageService.getServiceStatus());
+        verify(vertx).deployVerticle(any(Supplier.class), any(DeploymentOptions.class));
+        syncMessageVerticleMockedStatic.verify(() -> SyncMessageVerticle.create(any(JDBCPool.class)), times(1));
+    }
+
+    @Test
+    public void testDeployFailure() {
+        when(vertx.deployVerticle(any(Supplier.class), any(DeploymentOptions.class)))
+                .thenReturn(Future.failedFuture(new RuntimeException("Deployment failed")));
+
+        syncMessageVerticleMockedStatic.when(() -> SyncMessageVerticle.create(any(JDBCPool.class)))
+                .thenReturn(mock(SyncMessageVerticle.class));
+
+        Future<Boolean> future = syncMessageService.deploy(vertx, config);
+
+        assertTrue(future.failed());
+        assertNotEquals(ServiceStatus.ACTIVE, syncMessageService.getServiceStatus());
+        verify(vertx).deployVerticle(any(Supplier.class), any(DeploymentOptions.class));
+        syncMessageVerticleMockedStatic.verify(() -> SyncMessageVerticle.create(any(JDBCPool.class)), times(1));
+    }
+
+    @Test
+    public void testCreateJdbcConnectionPool() {
+        when(config.getString(AppConfig.DB_HOST)).thenReturn("localhost");
+        when(config.getString(AppConfig.DB_PORT, "1433")).thenReturn("1433");
+        when(config.getString(AppConfig.DB_NAME)).thenReturn("testdb");
+        when(config.getBoolean(AppConfig.DB_ENCRYPT, false)).thenReturn(false);
+        when(config.getString(AppConfig.DB_USERNAME)).thenReturn("user");
+        when(config.getString(AppConfig.DB_PASSWORD)).thenReturn("pass");
+        when(config.getInteger(AppConfig.DB_MAX_POOL_SIZE)).thenReturn(10);
+
+        JDBCPool pool = invokePrivateCreateJdbcConnectionPool(vertx, config);
+
+        assertNotNull(pool);
+        verify(config).getString(AppConfig.DB_HOST);
+        verify(config).getString(AppConfig.DB_PORT, "1433");
+        verify(config).getString(AppConfig.DB_NAME);
+        verify(config).getBoolean(AppConfig.DB_ENCRYPT, false);
+        verify(config).getString(AppConfig.DB_USERNAME);
+        verify(config).getString(AppConfig.DB_PASSWORD);
+        verify(config).getInteger(AppConfig.DB_MAX_POOL_SIZE);
+    }
+
+    @Test
+    public void testTeardownWithConnection() {
+        when(jdbcPool.close()).thenReturn(Future.succeededFuture());
+
+        syncMessageService.deploy(vertx, config).result(); // initialize pool
+
+        Future<Void> future = syncMessageService.teardown();
+
+        assertTrue(future.succeeded());
+        verify(jdbcPool).close();
+    }
+
+    @Test
+    public void testTeardownWithoutConnection() {
+        Future<Void> future = syncMessageService.teardown();
+
+        assertTrue(future.succeeded());
+        verify(jdbcPool, never()).close();
+    }
+
+    @Test
+    public void testGetServiceName() {
+        assertEquals("SyncMessageProcessor", syncMessageService.getServiceName());
+    }
+
+    private JDBCPool invokePrivateCreateJdbcConnectionPool(Vertx vertx, JsonObject config) {
+        try {
+            var method = SyncMessageService.class.getDeclaredMethod("createJdbcConnectionPool", Vertx.class, JsonObject.class);
+            method.setAccessible(true);
+            return (JDBCPool) method.invoke(syncMessageService, vertx, config);
+        } catch (Exception e) {
+            fail("Failed to invoke private method createJdbcConnectionPool");
+            return null;
         }
-
-        return INSTANCE;
-    }
-
-    private Supplier<Verticle> getVerticle(final Vertx vertx, final JsonObject jsonConfig) {
-        // Single pool shared across verticles
-        jdbcPool = createJdbcConnectionPool(vertx, jsonConfig);
-        return () ->SyncMessageVerticle.create(jdbcPool);
-    }
-
-    @Override
-    public Future<Boolean> deploy(final Vertx vertx, final JsonObject config) {
-        return vertx.deployVerticle(getVerticle(vertx, config),
-                new DeploymentOptions().setConfig(config)
-                        .setThreadingModel(ThreadingModel.WORKER)
-                        .setWorkerPoolName(WORKER_POOL_NAME)
-                        .setWorkerPoolSize(WORKER_POOL_SIZE)
-                        .setInstances(getInstanceCount())
-        ).compose(
-                result -> {
-                    LOG.info("{} successfully deployed", getServiceName());
-                    setStatus(ServiceStatus.ACTIVE);
-                    return Future.succeededFuture(true);
-                }
-        );
-    }
-
-
-    @Override
-    public String getServiceName() {
-        return SERVICE_NAME;
-    }
-
-    private JDBCPool createJdbcConnectionPool(final Vertx vertx, final JsonObject jsonConfig) {
-        final String connectionString = MessageFormat.format(
-                JDBC_URL_PATTERN,
-                jsonConfig.getString(AppConfig.DB_HOST),
-                jsonConfig.getString(AppConfig.DB_PORT, DEFAULT_DB_PORT),
-                jsonConfig.getString(AppConfig.DB_NAME),
-                jsonConfig.getBoolean(AppConfig.DB_ENCRYPT, false)
-        );
-
-        LOG.debug("DB connection string {}", connectionString);
-
-        final JsonObject config = new JsonObject()
-                .put("url", connectionString)
-                .put("user", jsonConfig.getString(AppConfig.DB_USERNAME))
-                .put("password", jsonConfig.getString(AppConfig.DB_PASSWORD))
-                .put("max_pool_size", jsonConfig.getInteger(AppConfig.DB_MAX_POOL_SIZE));
-
-        return JDBCPool.pool(vertx, config);
-    }
-
-    @Override
-    public Future<Void> teardown() {
-        if (jdbcPool == null) {
-            return super.teardown();
-        }
-
-        return jdbcPool.close();
     }
 }
