@@ -1,207 +1,98 @@
-import com.rabbitmq.client.BuiltinExchangeType;
+package com.usage.verticles.services;
+
 import com.usage.common.AppConfig;
-import com.usage.verticles.RabbitMQConsumerVerticle;
+import com.usage.verticles.SyncMessageVerticle;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;
+import io.vertx.core.ThreadingModel;
+import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
-import io.vertx.rabbitmq.RabbitMQClient;
-import io.vertx.rabbitmq.RabbitMQOptions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.junit.jupiter.api.extension.ExtendWith;
+import io.vertx.jdbcclient.JDBCPool;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.text.MessageFormat;
+import java.util.function.Supplier;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+public class SyncMessageService extends DeployVerticleService {
+    private static final Logger LOG = LoggerFactory.getLogger(SyncMessageService.class);
+    private static final String SERVICE_NAME = "SyncMessageProcessor";
+    private static final int WORKER_POOL_SIZE = 15;
+    private static final String WORKER_POOL_NAME = "SyncMessageProcessorPool";
+    private static final String JDBC_URL_PATTERN = "jdbc:sqlserver://{0}:{1};databaseName={2};encrypt={3}";
+    private static final String DEFAULT_DB_PORT = "1433";
+    private static SyncMessageService INSTANCE;
 
-@ExtendWith(MockitoExtension.class)
-public class RabbitMQServiceTest {
+    private JDBCPool jdbcPool;
 
-    @Mock
-    private Vertx vertx;
-
-    @Mock
-    private RabbitMQClient rabbitMQClient;
-
-    @Mock
-    private JsonObject config;
-
-    @InjectMocks
-    private RabbitMQService rabbitMQService;
-
-    private MockedStatic<RabbitMQClient> rabbitMQClientMockedStatic;
-    private MockedStatic<RabbitMQConsumerVerticle> rabbitMQConsumerVerticleMockedStatic;
-
-    @BeforeEach
-    public void setup() {
-        rabbitMQClientMockedStatic = Mockito.mockStatic(RabbitMQClient.class);
-        rabbitMQConsumerVerticleMockedStatic = Mockito.mockStatic(RabbitMQConsumerVerticle.class);
+    private SyncMessageService(final int instances) {
+        super(instances);
     }
 
-    @Test
-    public void testGetInstance() {
-        RabbitMQService instance1 = RabbitMQService.getInstance(5);
-        RabbitMQService instance2 = RabbitMQService.getInstance(10);
-
-        assertSame(instance1, instance2);  // Singleton behavior: both instances should be the same
-        assertEquals(5, instance1.getInstanceCount());  // The instance count should be the one passed initially
-    }
-
-    @Test
-    public void testDeploySuccess() {
-        when(config.getString(AppConfig.RABBITMQ_EXCHANGE_NAME)).thenReturn("exchange");
-        when(rabbitMQClient.start()).thenReturn(Future.succeededFuture());
-        when(rabbitMQClient.exchangeDeclare(any(), any(), anyBoolean(), anyBoolean()))
-                .thenReturn(Future.succeededFuture());
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.succeededFuture("deploymentID"));
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        Future<Boolean> future = rabbitMQService.deploy(vertx, config);
-
-        assertTrue(future.succeeded());
-        assertEquals(ServiceStatus.ACTIVE, rabbitMQService.getServiceStatus());
-        verify(rabbitMQClient).start();
-        verify(rabbitMQClient).exchangeDeclare(any(), any(), anyBoolean(), anyBoolean());
-        verify(vertx).deployVerticle(any(), any(DeploymentOptions.class));
-    }
-
-    @Test
-    public void testDeployFailureOnStart() {
-        when(rabbitMQClient.start()).thenReturn(Future.failedFuture(new RuntimeException("Connection failed")));
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        Future<Boolean> future = rabbitMQService.deploy(vertx, config);
-
-        assertTrue(future.failed());
-        assertNotEquals(ServiceStatus.ACTIVE, rabbitMQService.getServiceStatus());
-        verify(rabbitMQClient).start();
-        verify(rabbitMQClient, never()).exchangeDeclare(any(), any(), anyBoolean(), anyBoolean());
-    }
-
-    @Test
-    public void testDeployFailureOnExchangeDeclare() {
-        when(config.getString(AppConfig.RABBITMQ_EXCHANGE_NAME)).thenReturn("exchange");
-        when(rabbitMQClient.start()).thenReturn(Future.succeededFuture());
-        when(rabbitMQClient.exchangeDeclare(any(), any(), anyBoolean(), anyBoolean()))
-                .thenReturn(Future.failedFuture(new RuntimeException("Exchange declare failed")));
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        Future<Boolean> future = rabbitMQService.deploy(vertx, config);
-
-        assertTrue(future.failed());
-        assertNotEquals(ServiceStatus.ACTIVE, rabbitMQService.getServiceStatus());
-        verify(rabbitMQClient).start();
-        verify(rabbitMQClient).exchangeDeclare(any(), any(), anyBoolean(), anyBoolean());
-    }
-
-    @Test
-    public void testGetServiceName() {
-        assertEquals("RabbitMQ", rabbitMQService.getServiceName());
-    }
-
-    @Test
-    public void testCreateRabbitMqOptions() {
-        when(config.getString(AppConfig.RABBITMQ_HOST)).thenReturn("localhost");
-        when(config.getString(AppConfig.RABBITMQ_USERNAME)).thenReturn("guest");
-        when(config.getString(AppConfig.RABBITMQ_PASSWORD)).thenReturn("guest");
-        when(config.getInteger(AppConfig.RABBITMQ_PORT)).thenReturn(5672);
-        when(config.getInteger(AppConfig.RABBITMQ_RECOVERY_INTERVAL, 5000)).thenReturn(5000);
-        when(config.getString(AppConfig.RABBITMQ_VHOST, null)).thenReturn("/");
-        when(config.getBoolean(AppConfig.RABBITMQ_SSL_ENABLED)).thenReturn(true);
-
-        RabbitMQOptions options = invokePrivateCreateRabbitMqOptions(config);
-
-        assertEquals("localhost", options.getHost());
-        assertEquals("guest", options.getUser());
-        assertEquals("guest", options.getPassword());
-        assertEquals(5672, options.getPort());
-        assertEquals(5000, options.getNetworkRecoveryInterval());
-        assertEquals("/", options.getVirtualHost());
-        assertTrue(options.isSsl());
-    }
-
-    @Test
-    public void testTeardownSuccess() {
-        when(rabbitMQClient.isConnected()).thenReturn(true);
-        when(rabbitMQClient.stop()).thenReturn(Future.succeededFuture());
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        rabbitMQService.deploy(vertx, config).result(); // initialize client
-
-        Future<Void> future = rabbitMQService.teardown();
-
-        assertTrue(future.succeeded());
-        verify(rabbitMQClient).stop();
-    }
-
-    @Test
-    public void testTeardownWithoutConnection() {
-        when(rabbitMQClient.isConnected()).thenReturn(false);
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        rabbitMQService.deploy(vertx, config).result(); // initialize client
-
-        Future<Void> future = rabbitMQService.teardown();
-
-        assertTrue(future.succeeded());
-        verify(rabbitMQClient, never()).stop();
-    }
-
-    @Test
-    public void testCreateQueueAndDeployConsumer() {
-        when(config.getString(AppConfig.RABBITMQ_QUEUE_NAME_PREFIX)).thenReturn("prefix");
-        when(config.getString(AppConfig.RABBITMQ_EXCHANGE_NAME)).thenReturn("exchange");
-        when(config.getString(AppConfig.RABBITMQ_SILO_HEADER_KEY)).thenReturn("silo");
-        when(config.getString(AppConfig.RABBITMQ_QUEUES)).thenReturn("queue1;queue2");
-
-        when(rabbitMQClient.queueDeclare(any(), anyBoolean(), anyBoolean(), anyBoolean()))
-                .thenReturn(Future.succeededFuture());
-        when(rabbitMQClient.queueBind(any(), any(), any(), any(Map.class)))
-                .thenReturn(Future.succeededFuture());
-        when(vertx.deployVerticle(any(), any(DeploymentOptions.class)))
-                .thenReturn(Future.succeededFuture("deploymentID"));
-
-        rabbitMQClientMockedStatic.when(() -> RabbitMQClient.create(any(), any(RabbitMQOptions.class)))
-                .thenReturn(rabbitMQClient);
-
-        List<Future<String>> futureList = rabbitMQService.createQueueAndDeployConsumer(vertx, config);
-
-        assertEquals(2, futureList.size());
-        futureList.forEach(future -> assertTrue(future.succeeded()));
-        verify(rabbitMQClient, times(2)).queueDeclare(any(), anyBoolean(), anyBoolean(), anyBoolean());
-        verify(rabbitMQClient, times(2)).queueBind(any(), any(), any(), any(Map.class));
-        verify(vertx, times(2)).deployVerticle(any(), any(DeploymentOptions.class));
-    }
-
-    private RabbitMQOptions invokePrivateCreateRabbitMqOptions(JsonObject config) {
-        try {
-            var method = RabbitMQService.class.getDeclaredMethod("createRabbitMqOptions", JsonObject.class);
-            method.setAccessible(true);
-            return (RabbitMQOptions) method.invoke(rabbitMQService, config);
-        } catch (Exception e) {
-            fail("Failed to invoke private method createRabbitMqOptions");
-            return null;
+    public static SyncMessageService getInstance(final int instances) {
+        if (INSTANCE == null) {
+            INSTANCE = new SyncMessageService(instances);
         }
+
+        return INSTANCE;
+    }
+
+    public Supplier<Verticle> getVerticle(final Vertx vertx, final JsonObject jsonConfig) {
+        // Single pool shared across verticles
+        jdbcPool = createJdbcConnectionPool(vertx, jsonConfig);
+        return () -> new SyncMessageVerticle(jdbcPool);
+    }
+
+    @Override
+    public Future<Boolean> deploy(final Vertx vertx, final JsonObject config) {
+        return vertx.deployVerticle(getVerticle(vertx, config),
+                new DeploymentOptions().setConfig(config)
+                        .setThreadingModel(ThreadingModel.WORKER)
+                        .setWorkerPoolName(WORKER_POOL_NAME)
+                        .setWorkerPoolSize(WORKER_POOL_SIZE)
+                        .setInstances(getInstanceCount())
+        ).compose(
+                result -> {
+                    LOG.info("{} successfully deployed", getServiceName());
+                    setStatus(ServiceStatus.ACTIVE);
+                    return Future.succeededFuture(true);
+                }
+        );
+    }
+
+
+    @Override
+    public String getServiceName() {
+        return SERVICE_NAME;
+    }
+
+    private JDBCPool createJdbcConnectionPool(final Vertx vertx, final JsonObject jsonConfig) {
+        final String connectionString = MessageFormat.format(
+                JDBC_URL_PATTERN,
+                jsonConfig.getString(AppConfig.DB_HOST),
+                jsonConfig.getString(AppConfig.DB_PORT, DEFAULT_DB_PORT),
+                jsonConfig.getString(AppConfig.DB_NAME),
+                jsonConfig.getBoolean(AppConfig.DB_ENCRYPT, false)
+        );
+
+        LOG.debug("DB connection string {}", connectionString);
+
+        final JsonObject config = new JsonObject()
+                .put("url", connectionString)
+                .put("user", jsonConfig.getString(AppConfig.DB_USERNAME))
+                .put("password", jsonConfig.getString(AppConfig.DB_PASSWORD))
+                .put("max_pool_size", jsonConfig.getInteger(AppConfig.DB_MAX_POOL_SIZE));
+
+        return JDBCPool.pool(vertx, config);
+    }
+
+    @Override
+    public Future<Void> teardown() {
+        if (jdbcPool == null) {
+            return super.teardown();
+        }
+
+        return jdbcPool.close();
     }
 }
