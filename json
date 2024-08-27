@@ -1,102 +1,167 @@
-package com.usage.verticles;
-
+import com.usage.common.AppConfig;
 import com.usage.common.Constants;
 import com.usage.common.EventBusAddresses;
 import com.usage.handlers.rest.RequestHandler;
 import com.usage.handlers.rest.services.DbSignatureValidator;
-import com.usage.handlers.rest.services.SignatureValidator;
 import com.usage.utils.UsageDataMapper;
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.tracing.TracingPolicy;
 import io.vertx.jdbcclient.JDBCPool;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.slf4j.MDC;
 
 import java.util.Base64;
 import java.util.List;
 
-public class SyncMessageVerticle extends AbstractVerticle {
-    private static final Logger LOG = LoggerFactory.getLogger(SyncMessageVerticle.class);
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
-    private EventBus eventBus;
-    private final SignatureValidator validator;
+@ExtendWith(VertxExtension.class)
+public class SyncMessageVerticleIntegrationTest {
 
-    private SyncMessageVerticle(final JDBCPool connectionPool) {
-        validator = new DbSignatureValidator(connectionPool);
+    @Mock
+    private JDBCPool jdbcPool;
+
+    @Mock
+    private DbSignatureValidator validator;
+
+    private SyncMessageVerticle syncMessageVerticle;
+
+    @BeforeEach
+    public void setup(Vertx vertx) {
+        // Initialize the SyncMessageVerticle with a mocked JDBCPool
+        syncMessageVerticle = SyncMessageVerticle.create(jdbcPool);
+        syncMessageVerticle.init(vertx, vertx.getOrCreateContext());
     }
 
-    public static SyncMessageVerticle create(final JDBCPool connectionPool) {
-        return new SyncMessageVerticle(connectionPool);
-    }
+    @Test
+    public void testProcessUsageDataSuccess(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        EventBus eventBus = vertx.eventBus();
+        JsonObject syncMessage = new JsonObject()
+                .put(Constants.CORRELATION_ID, "test-correlation-id")
+                .put(Constants.TENANT_ID, "test-tenant-id")
+                .put(Constants.INSTANCE_ID, "test-instance-id");
 
-    @Override
-    public void start() throws Exception {
-        super.start();
-        eventBus = vertx.eventBus();
-        eventBus.consumer(EventBusAddresses.PROCESS_SYNC_MESSAGE, processUsageData());
-    }
+        when(validator.validateSignature(anyString(), anyString(), any(byte[].class), any(byte[].class)))
+                .thenReturn(io.vertx.core.Future.succeededFuture(true));
 
-    protected Handler<Message<Buffer>> processUsageData() {
-
-        return (message) -> {
-            final Buffer body = message.body();
-            final JsonObject syncMessage = new JsonObject(body);
-            final String correlationId = UsageDataMapper.getCorrelationId(syncMessage);
-
-            MDC.put(Constants.CORRELATION_ID, correlationId);
-
-            LOG.trace("Validating usage request");
-            LOG.debug("Processing usage request: {}", correlationId);
-
-            final byte[] signature = Base64
-                    .getDecoder()
-                    .decode(message.headers().get(RequestHandler.SIGNATURE_HEADER));
-
-            final String tenantId = UsageDataMapper.getTenantId(syncMessage);
-            final String instanceId = UsageDataMapper.getInstanceId(syncMessage);
-
-            validator.validateSignature(tenantId, instanceId, signature, body.getBytes()).onSuccess(valid -> {
-                if (!valid) {
-                    LOG.debug("Invalid signature");
-                    message.fail(400, "Invalid signature");
-                    return;
-                }
-
-                final List<JsonObject> usageList = UsageDataMapper.map(syncMessage);
-                if (!usageList.isEmpty()) {
-                    eventBus.send(
-                            EventBusAddresses.USAGE_REQUEST,
-                            UsageDataMapper.convertLineOfStrings(usageList),
-                            new DeliveryOptions()
-                                    .setTracingPolicy(TracingPolicy.PROPAGATE)
-                                    .addHeader(Constants.CORRELATION_ID, correlationId)
-                    );
+        vertx.deployVerticle(syncMessageVerticle, testContext.succeeding(id -> {
+            // Act
+            Buffer messageBody = Buffer.buffer(syncMessage.encode());
+            eventBus.<JsonObject>request(EventBusAddresses.PROCESS_SYNC_MESSAGE, messageBody, new DeliveryOptions()
+                    .addHeader(RequestHandler.SIGNATURE_HEADER, Base64.getEncoder().encodeToString("signature".getBytes())), reply -> {
+                // Assert
+                if (reply.succeeded()) {
+                    JsonObject response = reply.result().body();
+                    assertEquals("test-correlation-id", response.getString(Constants.CORRELATION_ID));
+                    assertEquals("test-tenant-id", response.getString(Constants.TENANT_ID));
+                    assertEquals("test-instance-id", response.getString(Constants.INSTANCE_ID));
+                    testContext.completeNow();
                 } else {
-                    LOG.warn("No usage data {}", syncMessage);
+                    testContext.failNow(reply.cause());
                 }
-
-                LOG.info("Number of processed messages {}", usageList.size());
-                final var response = new JsonObject()
-                        .put(Constants.CORRELATION_ID, correlationId)
-                        .put(Constants.TENANT_ID, tenantId)
-                        .put(Constants.INSTANCE_ID, instanceId)
-                        .put(Constants.PROCESSED_USAGES, usageList.size());
-
-                message.reply(response);
-
-            }).onFailure(failed -> {
-                LOG.warn("Failed to validate the message {}", failed.getMessage());
-                message.fail(500, failed.getMessage());
-            }).onComplete((result) -> {
-                MDC.remove(Constants.CORRELATION_ID);
             });
-        };
+        }));
+    }
+
+    @Test
+    public void testProcessUsageDataInvalidSignature(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        EventBus eventBus = vertx.eventBus();
+        JsonObject syncMessage = new JsonObject()
+                .put(Constants.CORRELATION_ID, "test-correlation-id")
+                .put(Constants.TENANT_ID, "test-tenant-id")
+                .put(Constants.INSTANCE_ID, "test-instance-id");
+
+        when(validator.validateSignature(anyString(), anyString(), any(byte[].class), any(byte[].class)))
+                .thenReturn(io.vertx.core.Future.succeededFuture(false));
+
+        vertx.deployVerticle(syncMessageVerticle, testContext.succeeding(id -> {
+            // Act
+            Buffer messageBody = Buffer.buffer(syncMessage.encode());
+            eventBus.<JsonObject>request(EventBusAddresses.PROCESS_SYNC_MESSAGE, messageBody, new DeliveryOptions()
+                    .addHeader(RequestHandler.SIGNATURE_HEADER, Base64.getEncoder().encodeToString("signature".getBytes())), reply -> {
+                // Assert
+                if (reply.failed()) {
+                    assertEquals(400, reply.cause().getMessage().contains("Invalid signature"));
+                    testContext.completeNow();
+                } else {
+                    testContext.failNow(new AssertionError("Expected invalid signature failure"));
+                }
+            });
+        }));
+    }
+
+    @Test
+    public void testProcessUsageDataValidationFailure(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        EventBus eventBus = vertx.eventBus();
+        JsonObject syncMessage = new JsonObject()
+                .put(Constants.CORRELATION_ID, "test-correlation-id")
+                .put(Constants.TENANT_ID, "test-tenant-id")
+                .put(Constants.INSTANCE_ID, "test-instance-id");
+
+        when(validator.validateSignature(anyString(), anyString(), any(byte[].class), any(byte[].class)))
+                .thenReturn(io.vertx.core.Future.failedFuture("Validation error"));
+
+        vertx.deployVerticle(syncMessageVerticle, testContext.succeeding(id -> {
+            // Act
+            Buffer messageBody = Buffer.buffer(syncMessage.encode());
+            eventBus.<JsonObject>request(EventBusAddresses.PROCESS_SYNC_MESSAGE, messageBody, new DeliveryOptions()
+                    .addHeader(RequestHandler.SIGNATURE_HEADER, Base64.getEncoder().encodeToString("signature".getBytes())), reply -> {
+                // Assert
+                if (reply.failed()) {
+                    assertTrue(reply.cause().getMessage().contains("Validation error"));
+                    testContext.completeNow();
+                } else {
+                    testContext.failNow(new AssertionError("Expected validation failure"));
+                }
+            });
+        }));
+    }
+
+    @Test
+    public void testProcessUsageDataNoUsageData(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        EventBus eventBus = vertx.eventBus();
+        JsonObject syncMessage = new JsonObject()
+                .put(Constants.CORRELATION_ID, "test-correlation-id")
+                .put(Constants.TENANT_ID, "test-tenant-id")
+                .put(Constants.INSTANCE_ID, "test-instance-id")
+                .put("usages", new JsonObject()); // No usage data
+
+        when(validator.validateSignature(anyString(), anyString(), any(byte[].class), any(byte[].class)))
+                .thenReturn(io.vertx.core.Future.succeededFuture(true));
+
+        vertx.deployVerticle(syncMessageVerticle, testContext.succeeding(id -> {
+            // Act
+            Buffer messageBody = Buffer.buffer(syncMessage.encode());
+            eventBus.<JsonObject>request(EventBusAddresses.PROCESS_SYNC_MESSAGE, messageBody, new DeliveryOptions()
+                    .addHeader(RequestHandler.SIGNATURE_HEADER, Base64.getEncoder().encodeToString("signature".getBytes())), reply -> {
+                // Assert
+                if (reply.succeeded()) {
+                    JsonObject response = reply.result().body();
+                    assertEquals("test-correlation-id", response.getString(Constants.CORRELATION_ID));
+                    assertEquals("test-tenant-id", response.getString(Constants.TENANT_ID));
+                    assertEquals("test-instance-id", response.getString(Constants.INSTANCE_ID));
+                    assertEquals(0, response.getInteger(Constants.PROCESSED_USAGES));
+                    testContext.completeNow();
+                } else {
+                    testContext.failNow(reply.cause());
+                }
+            });
+        }));
     }
 }
