@@ -38,10 +38,10 @@ public class SyncMessageService extends DeployVerticleService {
         return INSTANCE;
     }
 
-    public Supplier<Verticle> getVerticle(final Vertx vertx, final JsonObject jsonConfig) {
+    private Supplier<Verticle> getVerticle(final Vertx vertx, final JsonObject jsonConfig) {
         // Single pool shared across verticles
         jdbcPool = createJdbcConnectionPool(vertx, jsonConfig);
-        return () -> new SyncMessageVerticle(jdbcPool);
+        return () ->SyncMessageVerticle.create(jdbcPool);
     }
 
     @Override
