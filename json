@@ -1,131 +1,100 @@
+package com.usage.verticles;
+
+import com.usage.annotations.ExcludeFromJacocoGeneratedReport;
 import com.usage.common.AppConfig;
-import com.usage.common.Constants;
-import com.usage.common.EventBusAddresses;
-import io.vertx.core.Vertx;
-import io.vertx.core.eventbus.DeliveryOptions;
-import io.vertx.core.eventbus.EventBus;
-import io.vertx.core.eventbus.Message;
+import com.usage.handlers.rest.UsageRequestHandler;
+import io.vertx.core.AbstractVerticle;
+import io.vertx.core.AsyncResult;
+import io.vertx.core.Promise;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.json.JsonObject;
-import io.vertx.junit5.VertxExtension;
-import io.vertx.junit5.VertxTestContext;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.slf4j.MDC;
-import software.amazon.awssdk.core.async.AsyncRequestBody;
-import software.amazon.awssdk.services.s3.S3AsyncClient;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
+import io.vertx.core.tracing.TracingPolicy;
+import io.vertx.ext.healthchecks.HealthCheckHandler;
+import io.vertx.ext.healthchecks.Status;
+import io.vertx.ext.web.Router;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.concurrent.CompletableFuture;
+import java.text.MessageFormat;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+public class ServerVerticle extends AbstractVerticle {
 
-@ExtendWith(VertxExtension.class)
-public class WriteUsageVerticleTest {
+    private static final Logger LOG = LoggerFactory.getLogger(ServerVerticle.class);
+    private static final String DEFAULT_CONTEXT_ROUTE = "/usage";
+    private static final String CONTEXT_ROUTE_PATTERN = "{0}/*";
+    private static final int DEFAULT_PORT = 8080;
 
-    @Mock
-    private S3AsyncClient s3AsyncClient;
-
-    private WriteUsageVerticle verticle;
-    private final String bucketName = "test-bucket";
-    private final String folderName = "usage";
-
-    @BeforeEach
-    public void setup(Vertx vertx) {
-        verticle = WriteUsageVerticle.create(s3AsyncClient);
-
-        // Config setup
-        JsonObject config = new JsonObject()
-                .put(AppConfig.S3_BUCKET_NAME, bucketName)
-                .put(AppConfig.S3_FOLDER_NAME, folderName);
-
-        verticle.init(vertx, vertx.getOrCreateContext());
-        verticle.getVertx().getOrCreateContext().config().mergeIn(config);
+    private ServerVerticle() {
     }
 
-    @Test
-    public void testStart(Vertx vertx, VertxTestContext testContext) {
-        EventBus eventBus = vertx.eventBus();
-        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
-            // Verify that the event bus consumer is registered
-            eventBus.consumer(EventBusAddresses.USAGE_REQUEST, message -> testContext.completeNow());
-            eventBus.send(EventBusAddresses.USAGE_REQUEST, "test-message");
-        }));
+    public static ServerVerticle create() {
+        return new ServerVerticle();
     }
 
-    @Test
-    public void testHandleMessageSuccess(Vertx vertx, VertxTestContext testContext) {
-        // Arrange
-        String correlationId = "test-correlation-id";
-        String usageString = "{\"data\":\"test\"}";
-        PutObjectResponse putObjectResponse = PutObjectResponse.builder().build();
-
-        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
-                .thenReturn(CompletableFuture.completedFuture(putObjectResponse));
-
-        EventBus eventBus = vertx.eventBus();
-        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
-            // Act
-            eventBus.request(EventBusAddresses.USAGE_REQUEST, usageString, new DeliveryOptions().addHeader(Constants.CORRELATION_ID, correlationId), reply -> {
-                // Assert
-                if (reply.succeeded()) {
-                    assertEquals(putObjectResponse.toString(), reply.result().body());
-                    testContext.completeNow();
-                } else {
-                    testContext.failNow(reply.cause());
-                }
-            });
-        }));
+    @Override
+    public void start(final Promise<Void> startPromise) {
+        final Router router = setupRouter();
+        final Integer port = config().getInteger(AppConfig.HTTP_PORT, DEFAULT_PORT);
+        startServer(startPromise, router, port);
     }
 
-    @Test
-    public void testHandleMessageFailure(Vertx vertx, VertxTestContext testContext) {
-        // Arrange
-        String correlationId = "test-correlation-id";
-        String usageString = "{\"data\":\"test\"}";
+    private Router setupRouter() {
+        final Router restApiRouter = Router.router(vertx);
+        final Router mainRouter = Router.router(vertx);
+        final JsonObject config = config();
 
-        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
-                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("S3 error")));
+        //set context root
+        final String contextRoute = MessageFormat.format(
+                CONTEXT_ROUTE_PATTERN,
+                config.getString(AppConfig.CONTEXT_ROUTE, DEFAULT_CONTEXT_ROUTE)
+        );
+        mainRouter.route(contextRoute).subRouter(restApiRouter);
+        setUpHealthUrl(restApiRouter, config);
 
-        EventBus eventBus = vertx.eventBus();
-        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
-            // Act
-            eventBus.request(EventBusAddresses.USAGE_REQUEST, usageString, new DeliveryOptions().addHeader(Constants.CORRELATION_ID, correlationId), reply -> {
-                // Assert
-                if (reply.failed()) {
-                    assertEquals(500, reply.cause().getMessage().contains("Object hasn't been put to S3 bucket!"));
-                    testContext.completeNow();
-                } else {
-                    testContext.failNow(new AssertionError("Expected failure but got success."));
-                }
-            });
-        }));
+        UsageRequestHandler
+                .create(vertx.eventBus())
+                .registerHandlers(restApiRouter);
+
+        return mainRouter;
     }
 
-    @Test
-    public void testWriteUsageDataAsync() {
-        // Arrange
-        String correlationId = "test-correlation-id";
-        String usageString = "{\"data\":\"test\"}";
+    private void setUpHealthUrl(final Router restApiRouter, final JsonObject config) {
+        final JsonObject jsonObject = new JsonObject();
+        jsonObject
+                .put("version", config.getString(AppConfig.APP_VERSION, "unknown"))
+                .put("buildDate", config.getString(AppConfig.BUILD_DATE, ""))
+                .put("gitHash", config.getString(AppConfig.GIT_HASH, ""));
 
-        PutObjectResponse putObjectResponse = PutObjectResponse.builder().build();
-        CompletableFuture<PutObjectResponse> future = CompletableFuture.completedFuture(putObjectResponse);
-        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class))).thenReturn(future);
 
-        // Act
-        CompletableFuture<PutObjectResponse> result = verticle.writeUsageDataAsync(correlationId, usageString);
+        final HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
+        // Status can provide addition data provided as JSON
+        healthCheckHandler.register("app", promise -> {
+            promise.complete(Status.OK(jsonObject));
+        });
 
-        // Assert
-        assertEquals(putObjectResponse, result.join());
-        ArgumentCaptor<PutObjectRequest> putObjectRequestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3AsyncClient).putObject(putObjectRequestCaptor.capture(), any(AsyncRequestBody.class));
-        assertEquals(bucketName, putObjectRequestCaptor.getValue().bucket());
-        assertEquals(folderName + "/" + correlationId + ".json", putObjectRequestCaptor.getValue().key());
+        restApiRouter.get("/health").handler(healthCheckHandler);
+    }
+
+    private void startServer(Promise<Void> startPromise, Router router, Integer port) {
+        final HttpServerOptions options = new HttpServerOptions().setLogActivity(true)
+                .setTracingPolicy(TracingPolicy.PROPAGATE);
+        vertx.createHttpServer(options)
+                .requestHandler(router)
+                .listen(port,
+                        result -> handleServerStartResp(startPromise, port, result));
+        LOG.debug("started verticle {} with id: {} ", ServerVerticle.class.getSimpleName(), deploymentID());
+    }
+
+    @ExcludeFromJacocoGeneratedReport
+    private void handleServerStartResp(final Promise<Void> future,
+                                       final Integer port,
+                                       final AsyncResult<HttpServer> result) {
+        if (result.succeeded()) {
+            future.complete();
+            LOG.info("Http server running on port: {}", port);
+        } else {
+            future.fail(result.cause());
+        }
     }
 }
