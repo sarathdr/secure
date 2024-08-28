@@ -1,149 +1,61 @@
-import com.usage.common.AppConfig;
-import com.usage.handlers.rest.UsageRequestHandler;
-import io.vertx.core.AsyncResult;
+package com.usage.handlers.rest.services;
+
+import com.flexnet.lm.binary.PublisherIdentityRecord;
+import com.flexnet.lm.signer.Signer;
+import com.flexnet.lm.signer.SignerFactory;
 import io.vertx.core.Future;
-import io.vertx.core.Promise;
-import io.vertx.core.Vertx;
-import io.vertx.core.http.HttpServer;
-import io.vertx.core.http.HttpServerOptions;
-import io.vertx.core.json.JsonObject;
-import io.vertx.ext.healthchecks.HealthCheckHandler;
-import io.vertx.ext.healthchecks.Status;
-import io.vertx.ext.web.Router;
-import io.vertx.junit5.VertxExtension;
-import io.vertx.junit5.VertxTestContext;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
+import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.sqlclient.Tuple;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.text.MessageFormat;
+public class DbSignatureValidator implements SignatureValidator {
+    private static final Logger LOG = LoggerFactory.getLogger(DbSignatureValidator.class);
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.*;
+    private static final String SQL_TENANT_ID = "SELECT ID from LFS_TENANT where name = ?";
+    private static final String SQL_SIG_ID = "SELECT PUBLISHER_SIGNATURE_ID from LFS_HOST where identifier = ? and TENANT_ID IN (" + SQL_TENANT_ID + " )";
+    private static final String SQL_IDENTITY = "SELECT BACKOFFICE_IDENTITY from LFS_PUBLISHER_SIGNATURE where  ID IN(" + SQL_SIG_ID + ")";
+    private static final String IDENTITY_COLUMN_NAME = "BACKOFFICE_IDENTITY";
 
-@ExtendWith(VertxExtension.class)
-public class ServerVerticleTest {
+    private final JDBCPool jdbcPool;
 
-    @Mock
-    private Vertx vertx;
-
-    @Mock
-    private HttpServer httpServer;
-
-    @Mock
-    private AsyncResult<HttpServer> asyncResult;
-
-    @Mock
-    private UsageRequestHandler usageRequestHandler;
-
-    private ServerVerticle serverVerticle;
-
-    @BeforeEach
-    public void setup(Vertx vertx) {
-        serverVerticle = ServerVerticle.create();
-        serverVerticle.init(vertx, vertx.getOrCreateContext());
+    private DbSignatureValidator(final JDBCPool pool) {
+        jdbcPool = pool;
     }
 
-    @Test
-    public void testStart(Vertx vertx, VertxTestContext testContext) {
-        JsonObject config = new JsonObject()
-                .put(AppConfig.HTTP_PORT, 8080)
-                .put(AppConfig.CONTEXT_ROUTE, "/api");
-
-        vertx.getOrCreateContext().config().mergeIn(config);
-        vertx.deployVerticle(serverVerticle, testContext.succeeding(id -> {
-            // Check if the server started successfully
-            testContext.completeNow();
-        }));
+    public static DbSignatureValidator create(final JDBCPool pool){
+        return new DbSignatureValidator(pool);
     }
 
-    @Test
-    public void testSetupRouter(Vertx vertx) {
-        JsonObject config = new JsonObject()
-                .put(AppConfig.CONTEXT_ROUTE, "/api");
+    @Override
+    public Future<Boolean> validateSignature(final String tenantId, final String instanceId, byte[] signature, byte[] data) {
+        return jdbcPool
+                .preparedQuery(SQL_IDENTITY)
+                .execute(Tuple.of(instanceId, tenantId))
+                .compose(rows -> {
+                    if (rows.size() == 0) {
+                        return Future.succeededFuture(false);
+                    }
 
-        vertx.getOrCreateContext().config().mergeIn(config);
-        Router router = serverVerticle.setupRouter();
+                    final byte[] result = rows.iterator().next().getBuffer(IDENTITY_COLUMN_NAME).getBytes();
+                    final PublisherIdentityRecord identity = new PublisherIdentityRecord();
 
-        assertNotNull(router);
-    }
+                    try {
+                        identity.parseAll(result);
+                        identity.parse();
 
-    @Test
-    public void testSetUpHealthUrl() {
-        Router restApiRouter = Router.router(vertx);
-        JsonObject config = new JsonObject()
-                .put(AppConfig.APP_VERSION, "1.0")
-                .put(AppConfig.BUILD_DATE, "2023-01-01")
-                .put(AppConfig.GIT_HASH, "abcdef");
+                        final Signer signer = SignerFactory.getInstance(identity, SignerFactory.SignatureType.CLIENT_SERVER);
+                        signer.initVerify();
+                        for (byte jsonByte : data) {
+                            signer.update(jsonByte & 0xFF);
+                        }
 
-        serverVerticle.setUpHealthUrl(restApiRouter, config);
+                        return Future.succeededFuture(signer.isSignatureValid(signature));
+                    } catch (Exception e) {
+                        LOG.error("Failed to read signature", e);
+                        return Future.failedFuture(e);
+                    }
 
-        assertNotNull(restApiRouter.get("/health"));
-    }
-
-    @Test
-    public void testStartServerSuccess(Vertx vertx, VertxTestContext testContext) {
-        Router router = Router.router(vertx);
-        Integer port = 8080;
-
-        when(vertx.createHttpServer(any(HttpServerOptions.class))).thenReturn(httpServer);
-        when(httpServer.requestHandler(any())).thenReturn(httpServer);
-        when(httpServer.listen(anyInt(), any())).thenAnswer(invocation -> {
-            ((Handler<AsyncResult<HttpServer>>) invocation.getArgument(1)).handle(Future.succeededFuture(httpServer));
-            return httpServer;
-        });
-
-        Promise<Void> startPromise = Promise.promise();
-        serverVerticle.startServer(startPromise, router, port);
-
-        assertTrue(startPromise.future().succeeded());
-        testContext.completeNow();
-    }
-
-    @Test
-    public void testStartServerFailure(Vertx vertx, VertxTestContext testContext) {
-        Router router = Router.router(vertx);
-        Integer port = 8080;
-
-        when(vertx.createHttpServer(any(HttpServerOptions.class))).thenReturn(httpServer);
-        when(httpServer.requestHandler(any())).thenReturn(httpServer);
-        when(httpServer.listen(anyInt(), any())).thenAnswer(invocation -> {
-            ((Handler<AsyncResult<HttpServer>>) invocation.getArgument(1)).handle(Future.failedFuture("Server failed to start"));
-            return httpServer;
-        });
-
-        Promise<Void> startPromise = Promise.promise();
-        serverVerticle.startServer(startPromise, router, port);
-
-        assertTrue(startPromise.future().failed());
-        testContext.completeNow();
-    }
-
-    @Test
-    public void testHandleServerStartRespSuccess() {
-        Promise<Void> promise = Promise.promise();
-        when(asyncResult.succeeded()).thenReturn(true);
-
-        serverVerticle.handleServerStartResp(promise, 8080, asyncResult);
-
-        assertTrue(promise.future().succeeded());
-    }
-
-    @Test
-    public void testHandleServerStartRespFailure() {
-        Promise<Void> promise = Promise.promise();
-        when(asyncResult.succeeded()).thenReturn(false);
-        when(asyncResult.cause()).thenReturn(new RuntimeException("Server failed"));
-
-        serverVerticle.handleServerStartResp(promise, 8080, asyncResult);
-
-        assertTrue(promise.future().failed());
-        assertEquals("Server failed", promise.future().cause().getMessage());
+                });
     }
 }
