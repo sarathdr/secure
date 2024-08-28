@@ -1,61 +1,125 @@
-package com.usage.handlers.rest.services;
+import io.vertx.core.Future;
+import io.vertx.jdbcclient.JDBCPool;
+import io.vertx.sqlclient.Row;
+import io.vertx.sqlclient.RowSet;
+import io.vertx.sqlclient.Tuple;
+import io.vertx.sqlclient.impl.RowImpl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
 import com.flexnet.lm.binary.PublisherIdentityRecord;
 import com.flexnet.lm.signer.Signer;
 import com.flexnet.lm.signer.SignerFactory;
-import io.vertx.core.Future;
-import io.vertx.jdbcclient.JDBCPool;
-import io.vertx.sqlclient.Tuple;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vertx.core.buffer.Buffer;
+import org.junit.jupiter.api.extension.ExtendWith;
+import java.util.Iterator;
 
-public class DbSignatureValidator implements SignatureValidator {
-    private static final Logger LOG = LoggerFactory.getLogger(DbSignatureValidator.class);
+@ExtendWith(MockitoExtension.class)
+public class DbSignatureValidatorTest {
 
-    private static final String SQL_TENANT_ID = "SELECT ID from LFS_TENANT where name = ?";
-    private static final String SQL_SIG_ID = "SELECT PUBLISHER_SIGNATURE_ID from LFS_HOST where identifier = ? and TENANT_ID IN (" + SQL_TENANT_ID + " )";
-    private static final String SQL_IDENTITY = "SELECT BACKOFFICE_IDENTITY from LFS_PUBLISHER_SIGNATURE where  ID IN(" + SQL_SIG_ID + ")";
-    private static final String IDENTITY_COLUMN_NAME = "BACKOFFICE_IDENTITY";
+    @Mock
+    private JDBCPool jdbcPool;
 
-    private final JDBCPool jdbcPool;
+    @Mock
+    private RowSet<Row> rowSet;
 
-    private DbSignatureValidator(final JDBCPool pool) {
-        jdbcPool = pool;
+    @Mock
+    private Row row;
+
+    @Mock
+    private Signer signer;
+
+    @Mock
+    private PublisherIdentityRecord identity;
+
+    private DbSignatureValidator dbSignatureValidator;
+    private final byte[] signature = new byte[]{1, 2, 3};
+    private final byte[] data = new byte[]{4, 5, 6};
+
+    @BeforeEach
+    public void setup() {
+        dbSignatureValidator = DbSignatureValidator.create(jdbcPool);
     }
 
-    public static DbSignatureValidator create(final JDBCPool pool){
-        return new DbSignatureValidator(pool);
+    @Test
+    public void testCreate() {
+        assertNotNull(dbSignatureValidator);
     }
 
-    @Override
-    public Future<Boolean> validateSignature(final String tenantId, final String instanceId, byte[] signature, byte[] data) {
-        return jdbcPool
-                .preparedQuery(SQL_IDENTITY)
-                .execute(Tuple.of(instanceId, tenantId))
-                .compose(rows -> {
-                    if (rows.size() == 0) {
-                        return Future.succeededFuture(false);
-                    }
+    @Test
+    public void testValidateSignatureNoRows() {
+        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
+        when(rowSet.size()).thenReturn(0);
 
-                    final byte[] result = rows.iterator().next().getBuffer(IDENTITY_COLUMN_NAME).getBytes();
-                    final PublisherIdentityRecord identity = new PublisherIdentityRecord();
+        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
 
-                    try {
-                        identity.parseAll(result);
-                        identity.parse();
+        assertTrue(result.succeeded());
+        assertFalse(result.result());
+    }
 
-                        final Signer signer = SignerFactory.getInstance(identity, SignerFactory.SignatureType.CLIENT_SERVER);
-                        signer.initVerify();
-                        for (byte jsonByte : data) {
-                            signer.update(jsonByte & 0xFF);
-                        }
+    @Test
+    public void testValidateSignatureSuccess() throws Exception {
+        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
+        when(rowSet.size()).thenReturn(1);
+        when(rowSet.iterator()).thenReturn(new Iterator<Row>() {
+            private boolean hasNext = true;
 
-                        return Future.succeededFuture(signer.isSignatureValid(signature));
-                    } catch (Exception e) {
-                        LOG.error("Failed to read signature", e);
-                        return Future.failedFuture(e);
-                    }
+            @Override
+            public boolean hasNext() {
+                return hasNext;
+            }
 
-                });
+            @Override
+            public Row next() {
+                hasNext = false;
+                return row;
+            }
+        });
+        when(row.getBuffer(DbSignatureValidator.IDENTITY_COLUMN_NAME)).thenReturn(Buffer.buffer(new byte[]{1, 2, 3}));
+        when(identity.parseAll(any())).thenReturn(identity);
+        when(identity.parse()).thenReturn(identity);
+        when(SignerFactory.getInstance(any(), any())).thenReturn(signer);
+        when(signer.isSignatureValid(any())).thenReturn(true);
+
+        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
+
+        assertTrue(result.succeeded());
+        assertTrue(result.result());
+    }
+
+    @Test
+    public void testValidateSignatureFailureDuringProcessing() throws Exception {
+        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
+        when(rowSet.size()).thenReturn(1);
+        when(rowSet.iterator()).thenReturn(new Iterator<Row>() {
+            private boolean hasNext = true;
+
+            @Override
+            public boolean hasNext() {
+                return hasNext;
+            }
+
+            @Override
+            public Row next() {
+                hasNext = false;
+                return row;
+            }
+        });
+        when(row.getBuffer(DbSignatureValidator.IDENTITY_COLUMN_NAME)).thenReturn(Buffer.buffer(new byte[]{1, 2, 3}));
+        when(identity.parseAll(any())).thenThrow(new RuntimeException("Test exception"));
+
+        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
+
+        assertTrue(result.failed());
+        assertEquals("Test exception", result.cause().getMessage());
     }
 }
