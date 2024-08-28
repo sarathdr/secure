@@ -1,13 +1,19 @@
-package com.usage.verticles;
-
 import com.usage.common.AppConfig;
 import com.usage.common.Constants;
 import com.usage.common.EventBusAddresses;
-import io.vertx.core.AbstractVerticle;
-import io.vertx.core.Handler;
+import io.vertx.core.Vertx;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
 import io.vertx.core.eventbus.Message;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import io.vertx.core.json.JsonObject;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.slf4j.MDC;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
@@ -16,68 +22,110 @@ import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
 import java.util.concurrent.CompletableFuture;
 
-public class WriteUsageVerticle extends AbstractVerticle {
-    private static final Logger LOG = LoggerFactory.getLogger(WriteUsageVerticle.class);
-    private final S3AsyncClient s3AsyncClient;
-    private String bucketName;
-    private String folderName;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
-    private WriteUsageVerticle(final S3AsyncClient s3AsyncClient) {
-        this.s3AsyncClient = s3AsyncClient;
+@ExtendWith(VertxExtension.class)
+public class WriteUsageVerticleTest {
+
+    @Mock
+    private S3AsyncClient s3AsyncClient;
+
+    private WriteUsageVerticle verticle;
+    private final String bucketName = "test-bucket";
+    private final String folderName = "usage";
+
+    @BeforeEach
+    public void setup(Vertx vertx) {
+        verticle = WriteUsageVerticle.create(s3AsyncClient);
+
+        // Config setup
+        JsonObject config = new JsonObject()
+                .put(AppConfig.S3_BUCKET_NAME, bucketName)
+                .put(AppConfig.S3_FOLDER_NAME, folderName);
+
+        verticle.init(vertx, vertx.getOrCreateContext());
+        verticle.getVertx().getOrCreateContext().config().mergeIn(config);
     }
 
-    public static WriteUsageVerticle create(final S3AsyncClient s3AsyncClient) {
-        return new WriteUsageVerticle(s3AsyncClient);
+    @Test
+    public void testStart(Vertx vertx, VertxTestContext testContext) {
+        EventBus eventBus = vertx.eventBus();
+        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
+            // Verify that the event bus consumer is registered
+            eventBus.consumer(EventBusAddresses.USAGE_REQUEST, message -> testContext.completeNow());
+            eventBus.send(EventBusAddresses.USAGE_REQUEST, "test-message");
+        }));
     }
 
-    @Override
-    public void start() {
-        final var config = config();
-        bucketName = config.getString(AppConfig.S3_BUCKET_NAME);
-        folderName = config.getString(AppConfig.S3_FOLDER_NAME, "usage");
+    @Test
+    public void testHandleMessageSuccess(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        String correlationId = "test-correlation-id";
+        String usageString = "{\"data\":\"test\"}";
+        PutObjectResponse putObjectResponse = PutObjectResponse.builder().build();
 
-        vertx.eventBus().consumer(EventBusAddresses.USAGE_REQUEST, handleMessage());
-    }
+        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
+                .thenReturn(CompletableFuture.completedFuture(putObjectResponse));
 
-    private Handler<Message<String>> handleMessage() {
-        return message -> {
-            final String correlationId = message.headers().get(Constants.CORRELATION_ID);
-
-            MDC.put(Constants.CORRELATION_ID, correlationId);
-            LOG.trace("Uploading to s3 bucket");
-
-            final String usageString = message.body();
-            writeUsageDataAsync(correlationId, usageString).whenComplete(((putObjectResponse, throwable) -> {
-                MDC.put(Constants.CORRELATION_ID, correlationId);
-                LOG.trace("S3 upload finished");
-
-                if (throwable == null) {
-                    message.reply(putObjectResponse.toString());
-                    LOG.debug("Usage data has been to send to S3 {}", usageString);
+        EventBus eventBus = vertx.eventBus();
+        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
+            // Act
+            eventBus.request(EventBusAddresses.USAGE_REQUEST, usageString, new DeliveryOptions().addHeader(Constants.CORRELATION_ID, correlationId), reply -> {
+                // Assert
+                if (reply.succeeded()) {
+                    assertEquals(putObjectResponse.toString(), reply.result().body());
+                    testContext.completeNow();
                 } else {
-                    message.fail(500,
-                            "Object hasn't been put to S3 bucket!");
-                    LOG.error("Failed to send json to S3 - " + usageString, throwable);
+                    testContext.failNow(reply.cause());
                 }
-
-                MDC.remove(Constants.CORRELATION_ID);
-            }));
-
-            MDC.remove(Constants.CORRELATION_ID);
-        };
+            });
+        }));
     }
 
-    public CompletableFuture<PutObjectResponse> writeUsageDataAsync(final String correlationId, final String usageString) {
-        final String fileName = correlationId + ".json";
-        final String key = folderName + "/" + fileName;
+    @Test
+    public void testHandleMessageFailure(Vertx vertx, VertxTestContext testContext) {
+        // Arrange
+        String correlationId = "test-correlation-id";
+        String usageString = "{\"data\":\"test\"}";
 
-        final PutObjectRequest objectRequest = PutObjectRequest.builder()
-                .bucket(bucketName)
-                .key(key)
-                .build();
+        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class)))
+                .thenReturn(CompletableFuture.failedFuture(new RuntimeException("S3 error")));
 
-        LOG.debug("Sending Usages: {} to bucket: {}, key: {}", usageString, bucketName, key);
-        return s3AsyncClient.putObject(objectRequest, AsyncRequestBody.fromString(usageString));
+        EventBus eventBus = vertx.eventBus();
+        vertx.deployVerticle(verticle, testContext.succeeding(id -> {
+            // Act
+            eventBus.request(EventBusAddresses.USAGE_REQUEST, usageString, new DeliveryOptions().addHeader(Constants.CORRELATION_ID, correlationId), reply -> {
+                // Assert
+                if (reply.failed()) {
+                    assertEquals(500, reply.cause().getMessage().contains("Object hasn't been put to S3 bucket!"));
+                    testContext.completeNow();
+                } else {
+                    testContext.failNow(new AssertionError("Expected failure but got success."));
+                }
+            });
+        }));
     }
 
+    @Test
+    public void testWriteUsageDataAsync() {
+        // Arrange
+        String correlationId = "test-correlation-id";
+        String usageString = "{\"data\":\"test\"}";
+
+        PutObjectResponse putObjectResponse = PutObjectResponse.builder().build();
+        CompletableFuture<PutObjectResponse> future = CompletableFuture.completedFuture(putObjectResponse);
+        when(s3AsyncClient.putObject(any(PutObjectRequest.class), any(AsyncRequestBody.class))).thenReturn(future);
+
+        // Act
+        CompletableFuture<PutObjectResponse> result = verticle.writeUsageDataAsync(correlationId, usageString);
+
+        // Assert
+        assertEquals(putObjectResponse, result.join());
+        ArgumentCaptor<PutObjectRequest> putObjectRequestCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
+        verify(s3AsyncClient).putObject(putObjectRequestCaptor.capture(), any(AsyncRequestBody.class));
+        assertEquals(bucketName, putObjectRequestCaptor.getValue().bucket());
+        assertEquals(folderName + "/" + correlationId + ".json", putObjectRequestCaptor.getValue().key());
+    }
 }
