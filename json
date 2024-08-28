@@ -1,100 +1,149 @@
-package com.usage.verticles;
-
-import com.usage.annotations.ExcludeFromJacocoGeneratedReport;
 import com.usage.common.AppConfig;
 import com.usage.handlers.rest.UsageRequestHandler;
-import io.vertx.core.AbstractVerticle;
 import io.vertx.core.AsyncResult;
+import io.vertx.core.Future;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import io.vertx.core.http.HttpServer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.json.JsonObject;
-import io.vertx.core.tracing.TracingPolicy;
 import io.vertx.ext.healthchecks.HealthCheckHandler;
 import io.vertx.ext.healthchecks.Status;
 import io.vertx.ext.web.Router;
+import io.vertx.junit5.VertxExtension;
+import io.vertx.junit5.VertxTestContext;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.text.MessageFormat;
 
-public class ServerVerticle extends AbstractVerticle {
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.*;
 
-    private static final Logger LOG = LoggerFactory.getLogger(ServerVerticle.class);
-    private static final String DEFAULT_CONTEXT_ROUTE = "/usage";
-    private static final String CONTEXT_ROUTE_PATTERN = "{0}/*";
-    private static final int DEFAULT_PORT = 8080;
+@ExtendWith(VertxExtension.class)
+public class ServerVerticleTest {
 
-    private ServerVerticle() {
+    @Mock
+    private Vertx vertx;
+
+    @Mock
+    private HttpServer httpServer;
+
+    @Mock
+    private AsyncResult<HttpServer> asyncResult;
+
+    @Mock
+    private UsageRequestHandler usageRequestHandler;
+
+    private ServerVerticle serverVerticle;
+
+    @BeforeEach
+    public void setup(Vertx vertx) {
+        serverVerticle = ServerVerticle.create();
+        serverVerticle.init(vertx, vertx.getOrCreateContext());
     }
 
-    public static ServerVerticle create() {
-        return new ServerVerticle();
+    @Test
+    public void testStart(Vertx vertx, VertxTestContext testContext) {
+        JsonObject config = new JsonObject()
+                .put(AppConfig.HTTP_PORT, 8080)
+                .put(AppConfig.CONTEXT_ROUTE, "/api");
+
+        vertx.getOrCreateContext().config().mergeIn(config);
+        vertx.deployVerticle(serverVerticle, testContext.succeeding(id -> {
+            // Check if the server started successfully
+            testContext.completeNow();
+        }));
     }
 
-    @Override
-    public void start(final Promise<Void> startPromise) {
-        final Router router = setupRouter();
-        final Integer port = config().getInteger(AppConfig.HTTP_PORT, DEFAULT_PORT);
-        startServer(startPromise, router, port);
+    @Test
+    public void testSetupRouter(Vertx vertx) {
+        JsonObject config = new JsonObject()
+                .put(AppConfig.CONTEXT_ROUTE, "/api");
+
+        vertx.getOrCreateContext().config().mergeIn(config);
+        Router router = serverVerticle.setupRouter();
+
+        assertNotNull(router);
     }
 
-    private Router setupRouter() {
-        final Router restApiRouter = Router.router(vertx);
-        final Router mainRouter = Router.router(vertx);
-        final JsonObject config = config();
+    @Test
+    public void testSetUpHealthUrl() {
+        Router restApiRouter = Router.router(vertx);
+        JsonObject config = new JsonObject()
+                .put(AppConfig.APP_VERSION, "1.0")
+                .put(AppConfig.BUILD_DATE, "2023-01-01")
+                .put(AppConfig.GIT_HASH, "abcdef");
 
-        //set context root
-        final String contextRoute = MessageFormat.format(
-                CONTEXT_ROUTE_PATTERN,
-                config.getString(AppConfig.CONTEXT_ROUTE, DEFAULT_CONTEXT_ROUTE)
-        );
-        mainRouter.route(contextRoute).subRouter(restApiRouter);
-        setUpHealthUrl(restApiRouter, config);
+        serverVerticle.setUpHealthUrl(restApiRouter, config);
 
-        UsageRequestHandler
-                .create(vertx.eventBus())
-                .registerHandlers(restApiRouter);
-
-        return mainRouter;
+        assertNotNull(restApiRouter.get("/health"));
     }
 
-    private void setUpHealthUrl(final Router restApiRouter, final JsonObject config) {
-        final JsonObject jsonObject = new JsonObject();
-        jsonObject
-                .put("version", config.getString(AppConfig.APP_VERSION, "unknown"))
-                .put("buildDate", config.getString(AppConfig.BUILD_DATE, ""))
-                .put("gitHash", config.getString(AppConfig.GIT_HASH, ""));
+    @Test
+    public void testStartServerSuccess(Vertx vertx, VertxTestContext testContext) {
+        Router router = Router.router(vertx);
+        Integer port = 8080;
 
-
-        final HealthCheckHandler healthCheckHandler = HealthCheckHandler.create(vertx);
-        // Status can provide addition data provided as JSON
-        healthCheckHandler.register("app", promise -> {
-            promise.complete(Status.OK(jsonObject));
+        when(vertx.createHttpServer(any(HttpServerOptions.class))).thenReturn(httpServer);
+        when(httpServer.requestHandler(any())).thenReturn(httpServer);
+        when(httpServer.listen(anyInt(), any())).thenAnswer(invocation -> {
+            ((Handler<AsyncResult<HttpServer>>) invocation.getArgument(1)).handle(Future.succeededFuture(httpServer));
+            return httpServer;
         });
 
-        restApiRouter.get("/health").handler(healthCheckHandler);
+        Promise<Void> startPromise = Promise.promise();
+        serverVerticle.startServer(startPromise, router, port);
+
+        assertTrue(startPromise.future().succeeded());
+        testContext.completeNow();
     }
 
-    private void startServer(Promise<Void> startPromise, Router router, Integer port) {
-        final HttpServerOptions options = new HttpServerOptions().setLogActivity(true)
-                .setTracingPolicy(TracingPolicy.PROPAGATE);
-        vertx.createHttpServer(options)
-                .requestHandler(router)
-                .listen(port,
-                        result -> handleServerStartResp(startPromise, port, result));
-        LOG.debug("started verticle {} with id: {} ", ServerVerticle.class.getSimpleName(), deploymentID());
+    @Test
+    public void testStartServerFailure(Vertx vertx, VertxTestContext testContext) {
+        Router router = Router.router(vertx);
+        Integer port = 8080;
+
+        when(vertx.createHttpServer(any(HttpServerOptions.class))).thenReturn(httpServer);
+        when(httpServer.requestHandler(any())).thenReturn(httpServer);
+        when(httpServer.listen(anyInt(), any())).thenAnswer(invocation -> {
+            ((Handler<AsyncResult<HttpServer>>) invocation.getArgument(1)).handle(Future.failedFuture("Server failed to start"));
+            return httpServer;
+        });
+
+        Promise<Void> startPromise = Promise.promise();
+        serverVerticle.startServer(startPromise, router, port);
+
+        assertTrue(startPromise.future().failed());
+        testContext.completeNow();
     }
 
-    @ExcludeFromJacocoGeneratedReport
-    private void handleServerStartResp(final Promise<Void> future,
-                                       final Integer port,
-                                       final AsyncResult<HttpServer> result) {
-        if (result.succeeded()) {
-            future.complete();
-            LOG.info("Http server running on port: {}", port);
-        } else {
-            future.fail(result.cause());
-        }
+    @Test
+    public void testHandleServerStartRespSuccess() {
+        Promise<Void> promise = Promise.promise();
+        when(asyncResult.succeeded()).thenReturn(true);
+
+        serverVerticle.handleServerStartResp(promise, 8080, asyncResult);
+
+        assertTrue(promise.future().succeeded());
+    }
+
+    @Test
+    public void testHandleServerStartRespFailure() {
+        Promise<Void> promise = Promise.promise();
+        when(asyncResult.succeeded()).thenReturn(false);
+        when(asyncResult.cause()).thenReturn(new RuntimeException("Server failed"));
+
+        serverVerticle.handleServerStartResp(promise, 8080, asyncResult);
+
+        assertTrue(promise.future().failed());
+        assertEquals("Server failed", promise.future().cause().getMessage());
     }
 }
