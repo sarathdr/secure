@@ -1,94 +1,138 @@
-package com.usage.verticles;
-
 import com.usage.common.Constants;
 import com.usage.common.EventBusAddresses;
 import com.usage.utils.UsageDataMapper;
-import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Promise;
+import io.vertx.core.Vertx;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.tracing.TracingPolicy;
+import io.vertx.junit5.VertxExtension;
 import io.vertx.rabbitmq.RabbitMQClient;
 import io.vertx.rabbitmq.RabbitMQConsumer;
 import io.vertx.rabbitmq.RabbitMQMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.slf4j.MDC;
 
 import java.util.List;
 
-public class RabbitMQConsumerVerticle extends AbstractVerticle {
-    private static final Logger LOG = LoggerFactory.getLogger(RabbitMQConsumerVerticle.class);
-    private final RabbitMQClient client;
-    private final String queueName;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 
+@ExtendWith(VertxExtension.class)
+public class RabbitMQConsumerVerticleTest {
+
+    @Mock
+    private RabbitMQClient client;
+
+    @Mock
     private RabbitMQConsumer consumer;
 
-    private RabbitMQConsumerVerticle(final RabbitMQClient client, final String queueName) {
-        this.client = client;
-        this.queueName = queueName;
+    @Mock
+    private RabbitMQMessage rabbitMQMessage;
+
+    @Mock
+    private Vertx vertx;
+
+    @Mock
+    private UsageDataMapper usageDataMapper;
+
+    private RabbitMQConsumerVerticle verticle;
+    private final String queueName = "testQueue";
+
+    @BeforeEach
+    public void setup() {
+        verticle = RabbitMQConsumerVerticle.create(client, queueName);
+        verticle.init(vertx, vertx.getOrCreateContext());
     }
 
-    public static RabbitMQConsumerVerticle create(final RabbitMQClient client, final String queueName) {
-        return new RabbitMQConsumerVerticle(client, queueName);
+    @Test
+    public void testStartSuccess(Promise<Void> startPromise) {
+        when(client.basicConsumer(anyString())).thenReturn(Promise.<RabbitMQConsumer>promise().complete(consumer).future());
+
+        verticle.start(startPromise);
+
+        verify(client).basicConsumer(queueName);
+        verify(consumer).handler(any());
+        assertTrue(startPromise.future().succeeded());
     }
 
-    @Override
-    public void start(final Promise<Void> startPromise) {
-        LOG.info("Starting consumer for the queue {}", queueName);
+    @Test
+    public void testStartFailure(Promise<Void> startPromise) {
+        when(client.basicConsumer(anyString())).thenReturn(Promise.<RabbitMQConsumer>promise().fail("Failed").future());
 
-        client.basicConsumer(queueName).onSuccess(basicConsumer -> {
-            consumer = basicConsumer;
-            consumer.handler(this::messageHandler);
-            startPromise.complete();
-        }).onFailure(err -> {
-            LOG.error("Unable start the consumer for the queue - " + this.queueName, err.getCause());
-            startPromise.fail(err);
-        });
+        verticle.start(startPromise);
+
+        verify(client).basicConsumer(queueName);
+        assertTrue(startPromise.future().failed());
     }
 
-    private void messageHandler(final RabbitMQMessage rabbitMQMessage) {
+    @Test
+    public void testStopWhenConsumerIsInitialized(Promise<Void> stopPromise) {
+        when(client.basicConsumer(anyString())).thenReturn(Promise.<RabbitMQConsumer>promise().complete(consumer).future());
+        when(consumer.cancel()).thenReturn(Promise.<Void>promise().complete().future());
 
-        try {
-            final JsonObject jsonObject = new JsonObject(rabbitMQMessage.body());
-            final String correlationId = UsageDataMapper.getCorrelationId(jsonObject);
+        verticle.start(Promise.promise()); // Initialize the consumer
+        verticle.stop(stopPromise);
 
-            MDC.put(Constants.CORRELATION_ID, correlationId);
-            LOG.trace("Processing usage request");
-            LOG.debug("Processing usage request: {}", correlationId);
-
-            final List<JsonObject> usageList = UsageDataMapper.map(jsonObject);
-
-            if (!usageList.isEmpty()) {
-                vertx.eventBus().send(
-                        EventBusAddresses.USAGE_REQUEST,
-                        UsageDataMapper.convertLineOfStrings(usageList),
-                        new DeliveryOptions()
-                                .setTracingPolicy(TracingPolicy.PROPAGATE)
-                                .addHeader(Constants.CORRELATION_ID, correlationId)
-                );
-            } else {
-                LOG.warn("No usage data {}", jsonObject);
-            }
-        } catch (Exception e) {
-            LOG.error("Usage processing failed! Reason: " + e.getMessage(), e);
-        } finally {
-            MDC.remove(Constants.CORRELATION_ID);
-        }
+        verify(consumer).cancel();
+        assertTrue(stopPromise.future().succeeded());
     }
 
-    @Override
-    public void stop(final Promise<Void> stopPromise) {
-        if (consumer != null) {
-            consumer.cancel()
-                    .onSuccess(result -> stopPromise.complete())
-                    .onFailure(err -> {
-                                LOG.error("Unable to stop the consumer - " + this.queueName, err.getCause());
-                                stopPromise.fail(err);
-                            }
-                    );
-        } else {
-            stopPromise.complete();
-        }
+    @Test
+    public void testStopWhenConsumerIsNotInitialized(Promise<Void> stopPromise) {
+        verticle.stop(stopPromise);
+        verify(consumer, never()).cancel();
+        assertTrue(stopPromise.future().succeeded());
+    }
+
+    @Test
+    public void testMessageHandlerSuccess() {
+        JsonObject jsonObject = new JsonObject().put("data", "value");
+        when(rabbitMQMessage.body()).thenReturn(jsonObject.toBuffer());
+        when(UsageDataMapper.getCorrelationId(any())).thenReturn("test-correlation-id");
+        when(UsageDataMapper.map(any())).thenReturn(List.of(jsonObject));
+        when(UsageDataMapper.convertLineOfStrings(any())).thenReturn("mappedString");
+
+        ArgumentCaptor<String> addressCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> messageCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<DeliveryOptions> optionsCaptor = ArgumentCaptor.forClass(DeliveryOptions.class);
+
+        verticle.messageHandler(rabbitMQMessage);
+
+        verify(vertx.eventBus()).send(addressCaptor.capture(), messageCaptor.capture(), optionsCaptor.capture());
+        assertEquals(EventBusAddresses.USAGE_REQUEST, addressCaptor.getValue());
+        assertEquals("mappedString", messageCaptor.getValue());
+        assertEquals("test-correlation-id", optionsCaptor.getValue().getHeaders().get(Constants.CORRELATION_ID));
+    }
+
+    @Test
+    public void testMessageHandlerNoUsageData() {
+        JsonObject jsonObject = new JsonObject();
+        when(rabbitMQMessage.body()).thenReturn(jsonObject.toBuffer());
+        when(UsageDataMapper.getCorrelationId(any())).thenReturn("test-correlation-id");
+        when(UsageDataMapper.map(any())).thenReturn(List.of());
+
+        verticle.messageHandler(rabbitMQMessage);
+
+        verify(vertx.eventBus(), never()).send(anyString(), any(), any());
+    }
+
+    @Test
+    public void testMessageHandlerExceptionHandling() {
+        JsonObject jsonObject = new JsonObject().put("data", "value");
+        when(rabbitMQMessage.body()).thenReturn(jsonObject.toBuffer());
+        when(UsageDataMapper.getCorrelationId(any())).thenThrow(new RuntimeException("Test exception"));
+
+        // This test ensures that the message handler doesn't propagate the exception
+        assertDoesNotThrow(() -> verticle.messageHandler(rabbitMQMessage));
+
+        // Verify that nothing was sent to the event bus
+        verify(vertx.eventBus(), never()).send(anyString(), any(), any());
     }
 }
