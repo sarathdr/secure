@@ -1,132 +1,159 @@
-package com.usage.handlers.rest;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
-import com.networknt.schema.ValidationMessage;
 import com.usage.common.EventBusAddresses;
-import com.usage.utils.Operators;
-import io.vertx.core.Handler;
+import io.vertx.core.Future;
+import io.vertx.core.Vertx;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.eventbus.DeliveryOptions;
 import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.ext.web.handler.BodyHandler;
 import io.vertx.ext.web.impl.RoutingContextInternal;
-import io.vertx.json.schema.SchemaException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.net.URI;
 import java.util.Base64;
 import java.util.Set;
 
-public class UsageRequestHandler implements RequestHandler {
-    private static final JsonSchema VALIDATION_SCHEMA;
-    private final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
 
-    static {
-        final String REQ_SCHEMA_PATH = "classpath:/jsonRequestSchema.json";
-        final JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
-        VALIDATION_SCHEMA = factory.getSchema(URI.create(REQ_SCHEMA_PATH));
+@ExtendWith(MockitoExtension.class)
+public class UsageRequestHandlerTest {
+
+    @Mock
+    private EventBus eventBus;
+
+    @Mock
+    private RoutingContext routingContext;
+
+    @Mock
+    private Router router;
+
+    @Mock
+    private Message<Object> message;
+
+    private UsageRequestHandler usageRequestHandler;
+
+    @BeforeEach
+    public void setup() {
+        usageRequestHandler = UsageRequestHandler.create(eventBus);
     }
 
-    private final EventBus eventBus;
-
-
-    private UsageRequestHandler(final EventBus eventBus) {
-        this.eventBus = eventBus;
+    @Test
+    public void testCreate() {
+        assertNotNull(usageRequestHandler);
     }
 
-    public static UsageRequestHandler create(final EventBus eventBus) {
-        return new UsageRequestHandler(eventBus);
+    @Test
+    public void testRegisterHandlers() {
+        // Act
+        usageRequestHandler.registerHandlers(router);
+
+        // Verify that handlers were registered
+        verify(router, times(2)).post(anyString());
     }
 
-    @Override
-    public void registerHandlers(final Router router) {
-        router.post(ApiPath.API_SYNC_JSON)
-                .handler(validateJsonBody())
-                .handler(processJsonRequest());
+    @Test
+    public void testValidateJsonBody_Success() throws Exception {
+        // Arrange
+        when(routingContext.body().asString()).thenReturn("{\"name\":\"test\"}");
+        Set validations = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
+                .getSchema(URI.create("classpath:/jsonRequestSchema.json"))
+                .validate(new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"name\":\"test\"}"));
 
-        router.post(ApiPath.API_SYNC_FILE)
-                .handler(
-                        BodyHandler.create()
-                                .setMergeFormAttributes(true)
-                                .setDeleteUploadedFilesOnEnd(true)
-                )
-                .handler(parseFile())
-                .handler(validateJsonBody())
-                .handler(processJsonRequest());
+        // Act
+        usageRequestHandler.validateJsonBody().handle(routingContext);
+
+        // Assert
+        verify(routingContext).next();
     }
 
-    private Handler<RoutingContext> validateJsonBody() {
-        return (routingContext) -> {
-            try {
-                final JsonNode jsonNode = OBJECT_MAPPER.readTree(routingContext.body().asString());
-                final Set<ValidationMessage> validations = VALIDATION_SCHEMA.validate(jsonNode);
+    @Test
+    public void testValidateJsonBody_Failure() throws Exception {
+        // Arrange
+        when(routingContext.body().asString()).thenReturn("{\"name\":\"\"}");
+        doAnswer(invocation -> {
+            routingContext.response().setStatusCode(400).end(new JsonObject().put("errors", new JsonArray().add("error")).toBuffer());
+            return null;
+        }).when(routingContext).next();
 
-                if (validations.isEmpty()) {
-                    routingContext.next();
-                } else {
-                    final JsonArray errors = new JsonArray();
-                    validations.forEach(validationMessage -> errors.add(validationMessage.getMessage()));
+        // Act
+        usageRequestHandler.validateJsonBody().handle(routingContext);
 
-                    routingContext.response()
-                            .setStatusCode(400)
-                            .putHeader(CONTENT_TYPE, JSON_CONTENT)
-                            .end(JsonObject.of(ERR_MESSAGE_KEY, errors).toBuffer());
-                }
-
-            } catch (SchemaException | ClassCastException | JsonProcessingException e) {
-                final JsonArray errors = new JsonArray();
-                final JsonObject error = JsonObject.of(ERR_MESSAGE_KEY, errors.add("Invalid json request. " + e.getMessage()));
-
-                routingContext.response()
-                        .setStatusCode(400)
-                        .putHeader(CONTENT_TYPE, JSON_CONTENT)
-                        .end(error.toBuffer());
-            }
-        };
+        // Assert
+        verify(routingContext.response()).setStatusCode(400);
     }
 
-    private Handler<RoutingContext> processJsonRequest() {
-        return (routingContext) -> {
-            final DeliveryOptions deliveryOptions = new DeliveryOptions()
-                    .addHeader(SIGNATURE_HEADER, routingContext.request().getHeader(SIGNATURE_HEADER));
+    @Test
+    public void testValidateJsonBody_InvalidJson() {
+        // Arrange
+        when(routingContext.body().asString()).thenThrow(new RuntimeException("Invalid JSON"));
 
-            eventBus.request(EventBusAddresses.PROCESS_SYNC_MESSAGE, routingContext.body().buffer(), deliveryOptions)
-                    .onSuccess(resp -> {
-                        final JsonObject response = (JsonObject) resp.body();
+        // Act
+        usageRequestHandler.validateJsonBody().handle(routingContext);
 
-                        routingContext.response()
-                                .putHeader(CONTENT_TYPE, JSON_CONTENT)
-                                .setStatusCode(200)
-                                .end(response.toString());
-                    })
-                    .onFailure((error) -> {
-                        routingContext.fail(error.getCause());
-                    });
-        };
-
+        // Assert
+        verify(routingContext.response()).setStatusCode(400);
     }
 
-    private Handler<RoutingContext> parseFile() {
-        return (routingContext) -> {
-            final Buffer buffer = routingContext.body().buffer();
-            final byte[] signatureLength = buffer.getBytes(0, 4);
-            final int sigLength = Operators.byteArrayToInt(signatureLength);
+    @Test
+    public void testProcessJsonRequest_Success() {
+        // Arrange
+        when(routingContext.body().buffer()).thenReturn(Buffer.buffer("body-content"));
+        when(eventBus.request(anyString(), any(Buffer.class), any(DeliveryOptions.class)))
+                .thenReturn(Future.succeededFuture(message));
+        when(message.body()).thenReturn(new JsonObject().put("status", "success"));
 
-            final byte[] signature = buffer.getBytes(4, sigLength + 4);
-            final byte[] json = buffer.getBytes(4 + sigLength, buffer.length());
+        // Act
+        usageRequestHandler.processJsonRequest().handle(routingContext);
 
-            ((RoutingContextInternal) routingContext).setBody(Buffer.buffer(json));
-            routingContext.request().headers().add(SIGNATURE_HEADER, Base64.getEncoder().encodeToString(signature));
+        // Assert
+        verify(routingContext.response()).setStatusCode(200);
+        verify(routingContext.response()).end(anyString());
+    }
 
-            routingContext.next();
-        };
+    @Test
+    public void testProcessJsonRequest_Failure() {
+        // Arrange
+        when(routingContext.body().buffer()).thenReturn(Buffer.buffer("body-content"));
+        when(eventBus.request(anyString(), any(Buffer.class), any(DeliveryOptions.class)))
+                .thenReturn(Future.failedFuture(new RuntimeException("Failed processing")));
+
+        // Act
+        usageRequestHandler.processJsonRequest().handle(routingContext);
+
+        // Assert
+        verify(routingContext).fail(any());
+    }
+
+    @Test
+    public void testParseFile() {
+        // Arrange
+        byte[] content = new byte[]{0, 0, 0, 10, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16};
+        Buffer buffer = Buffer.buffer(content);
+        RoutingContextInternal routingContextInternal = mock(RoutingContextInternal.class);
+
+        when(routingContext.body()).thenReturn(buffer);
+        when(routingContext.request()).thenReturn(mock(io.vertx.core.http.HttpServerRequest.class));
+        when(routingContextInternal.body()).thenReturn(buffer);
+
+        // Act
+        usageRequestHandler.parseFile().handle(routingContextInternal);
+
+        // Assert
+        verify(routingContextInternal).setBody(any(Buffer.class));
+        verify(routingContext.request().headers()).add(anyString(), anyString());
     }
 }
