@@ -1,32 +1,145 @@
-import org.junit.jupiter.api.Test;
+package com.usage.utils;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import com.usage.models.Feature;
+import com.usage.models.UsageDataJson;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class OperatorsTest {
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
-    @Test
-    public void testByteArrayToInt() {
-        // Test with typical 4-byte values
-        byte[] bytes = {0x01, 0x02, 0x03, 0x04};
-        int result = Operators.byteArrayToInt(bytes);
-        assertEquals(16909060, result); // 0x01020304 in decimal
+public class UsageDataMapper {
+    private static final Logger LOG = LoggerFactory.getLogger(UsageDataMapper.class);
+    private static final String DEFAULT_METER = "feature";
+    private static final float DEFAULT_METER_COST = 1.0F;
 
-        // Test with negative values
-        byte[] negativeBytes = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        result = Operators.byteArrayToInt(negativeBytes);
-        assertEquals(-1, result); // All bits set to 1 should be -1 for a signed integer
+    public static List<JsonObject> map(final JsonObject usageData) {
+        final String tenantId = usageData.getString("TenantId");
 
-        // Test with boundary values
-        byte[] minBytes = {0x00, 0x00, 0x00, 0x00};
-        result = Operators.byteArrayToInt(minBytes);
-        assertEquals(0, result); // All zeros should be 0
+        final JsonArray clients = usageData.getJsonArray("Clients");
+        return clients.stream().map((client) -> {
 
-        byte[] maxBytes = {0x7F, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
-        result = Operators.byteArrayToInt(maxBytes);
-        assertEquals(2147483647, result); // Maximum positive value for a 4-byte signed integer
+            final JsonObject clientObj = (JsonObject) client;
+            final JsonObject server = clientObj.getJsonObject("ServerId");
+            final JsonObject consumer = clientObj.getJsonObject("RequestHostId");
 
-        byte[] minNegativeBytes = {(byte) 0x80, 0x00, 0x00, 0x00};
-        result = Operators.byteArrayToInt(minNegativeBytes);
-        assertEquals(-2147483648, result); // Minimum negative value for a 4-byte signed integer
+
+            final List<Feature> featureList = new ArrayList<>();
+            if (clientObj.getValue("MeteredFeatures") instanceof JsonArray) {
+                featureList.addAll(mapFeature(clientObj.getJsonArray("MeteredFeatures"), null));
+            }
+
+            if (clientObj.getValue("ConcurrentFeatures") instanceof JsonArray) {
+                final Long updateTime = clientObj.getLong("LastUpdateTime");
+                featureList.addAll(mapFeature(clientObj.getJsonArray("ConcurrentFeatures"), updateTime));
+            }
+
+            final String instanceId = server != null ? server.getString("Id") : null;
+            final String consumerId = consumer != null ? consumer.getString("Id") : null;
+            final String consumerType = consumer != null ? consumer.getString("Type") : null;
+
+            return featureList.stream().map(feature ->
+                    UsageDataJson
+                            .builder()
+                            .correlationId(clientObj.getString("CorrelationId"))
+                            .instanceId(instanceId)
+                            .tenantId(tenantId)
+                            .consumerId(consumerId)
+                            .metaData(clientObj.getJsonObject("VendorDictionary"))
+                            .consumerType(consumerType)
+                            .incremental(clientObj.getBoolean("IsIncremental"))
+                            .feature(feature)
+                            .build()
+                            .buildJson()
+
+            ).collect(Collectors.toList());
+
+        }).flatMap(List::stream).collect(Collectors.toList());
     }
+
+    public static String convertLineOfStrings(final List<JsonObject> usageList) {
+        return usageList.stream()
+                .map(JsonObject::toString)
+                .collect(Collectors.joining("\n"));
+    }
+
+    public static String getCorrelationId(final JsonObject json) {
+        final String serverHostId = getInstanceId(json);
+        final String lastPublishedTime = json.getString("LastMessagePublishedTime");
+        final String uniqueId = UUID.randomUUID().toString();
+        return serverHostId + "_" + lastPublishedTime + "_" + uniqueId;
+    }
+
+    public static String getInstanceId(final JsonObject json) {
+        return json.getJsonObject("SourceHostId").getString("Id");
+    }
+
+    public static String getTenantId(final JsonObject json) {
+        return json.getString("TenantId");
+    }
+
+    private static List<Feature> mapFeature(final JsonArray features, final Long updateTime) {
+
+        return features
+                .stream()
+                .map(item -> {
+                    final JsonObject feature = (JsonObject) item;
+                    final Long usageTime = updateTime == null
+                            ? feature.getLong("LastConsumeTime")
+                            : updateTime;
+
+                    if (usageTime == null) {
+                        LOG.warn("Usage time is null for the feature {}", feature.getString("Name"));
+                    }
+
+
+                    return Feature.builder()
+                            .item(feature.getString("Name"))
+                            .itemVersion(feature.getString("Version"))
+                            .itemQuantity(feature.getDouble("UsageCount"))
+                            .mappedEntitledCount(feature.getInteger("Count"))
+                            .meter(DEFAULT_METER)
+                            .meterCost(DEFAULT_METER_COST)
+                            .meterType(feature.getString("Type").toLowerCase())
+                            .meterQuantity(feature.getDouble("UsageCount"))
+                            .used(feature.getDouble("TotalUsedCount"))
+                            .partial(feature.getBoolean("IsPartial"))
+                            .overdraftCount(feature.getInteger("Overdraft"))
+                            .activationIds(convertJsonArrayToArray(feature.getJsonArray("ActivationIds")))
+                            .entitledArticles(convertJsonArrayToArray(feature.getJsonArray("EntitledArticles")))
+                            .entitledArticleVersions(convertJsonArrayToArray(feature.getJsonArray("EntitledArticleVersions")))
+                            .usageTime(usageTime)
+                            .controlsApplied(getControlApplied(feature.getString("PartitionName")))
+                            .build();
+                })
+                .toList();
+    }
+
+    private static JsonObject getControlApplied(final String partitionInfo) {
+        if (!StringUtils.isEmpty(partitionInfo)) {
+            return new JsonObject().put(
+                    "partition",
+                    partitionInfo
+            );
+        }
+
+        return null;
+    }
+
+    private static String[] convertJsonArrayToArray(JsonArray jsonArray) {
+        if (jsonArray != null) {
+            String[] array = new String[jsonArray.size()];
+            for (int i = 0; i < jsonArray.size(); i++) {
+                array[i] = jsonArray.getString(i);
+            }
+            return array;
+        }
+        return null;
+    }
+
 }
