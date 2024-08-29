@@ -1,145 +1,149 @@
-package com.usage.utils;
-
 import com.usage.models.Feature;
 import com.usage.models.UsageDataJson;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-public class UsageDataMapper {
-    private static final Logger LOG = LoggerFactory.getLogger(UsageDataMapper.class);
-    private static final String DEFAULT_METER = "feature";
-    private static final float DEFAULT_METER_COST = 1.0F;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mockStatic;
 
-    public static List<JsonObject> map(final JsonObject usageData) {
-        final String tenantId = usageData.getString("TenantId");
+public class UsageDataMapperTest {
 
-        final JsonArray clients = usageData.getJsonArray("Clients");
-        return clients.stream().map((client) -> {
-
-            final JsonObject clientObj = (JsonObject) client;
-            final JsonObject server = clientObj.getJsonObject("ServerId");
-            final JsonObject consumer = clientObj.getJsonObject("RequestHostId");
-
-
-            final List<Feature> featureList = new ArrayList<>();
-            if (clientObj.getValue("MeteredFeatures") instanceof JsonArray) {
-                featureList.addAll(mapFeature(clientObj.getJsonArray("MeteredFeatures"), null));
-            }
-
-            if (clientObj.getValue("ConcurrentFeatures") instanceof JsonArray) {
-                final Long updateTime = clientObj.getLong("LastUpdateTime");
-                featureList.addAll(mapFeature(clientObj.getJsonArray("ConcurrentFeatures"), updateTime));
-            }
-
-            final String instanceId = server != null ? server.getString("Id") : null;
-            final String consumerId = consumer != null ? consumer.getString("Id") : null;
-            final String consumerType = consumer != null ? consumer.getString("Type") : null;
-
-            return featureList.stream().map(feature ->
-                    UsageDataJson
-                            .builder()
-                            .correlationId(clientObj.getString("CorrelationId"))
-                            .instanceId(instanceId)
-                            .tenantId(tenantId)
-                            .consumerId(consumerId)
-                            .metaData(clientObj.getJsonObject("VendorDictionary"))
-                            .consumerType(consumerType)
-                            .incremental(clientObj.getBoolean("IsIncremental"))
-                            .feature(feature)
-                            .build()
-                            .buildJson()
-
-            ).collect(Collectors.toList());
-
-        }).flatMap(List::stream).collect(Collectors.toList());
+    @BeforeEach
+    public void setup() {
+        // Any setup if required for all tests
     }
 
-    public static String convertLineOfStrings(final List<JsonObject> usageList) {
-        return usageList.stream()
-                .map(JsonObject::toString)
-                .collect(Collectors.joining("\n"));
+    @Test
+    public void testMap_withValidUsageData() {
+        JsonObject usageData = new JsonObject()
+                .put("TenantId", "tenant1")
+                .put("Clients", new JsonArray().add(
+                        new JsonObject()
+                                .put("ServerId", new JsonObject().put("Id", "server1"))
+                                .put("RequestHostId", new JsonObject().put("Id", "consumer1").put("Type", "type1"))
+                                .put("MeteredFeatures", new JsonArray().add(new JsonObject().put("Name", "feature1")))
+                                .put("ConcurrentFeatures", new JsonArray().add(new JsonObject().put("Name", "feature2")))
+                                .put("LastUpdateTime", 1000L)
+                ));
+
+        List<JsonObject> result = UsageDataMapper.map(usageData);
+
+        assertFalse(result.isEmpty());
+        assertEquals(2, result.size());
     }
 
-    public static String getCorrelationId(final JsonObject json) {
-        final String serverHostId = getInstanceId(json);
-        final String lastPublishedTime = json.getString("LastMessagePublishedTime");
-        final String uniqueId = UUID.randomUUID().toString();
-        return serverHostId + "_" + lastPublishedTime + "_" + uniqueId;
+    @Test
+    public void testMap_withEmptyFeatures() {
+        JsonObject usageData = new JsonObject()
+                .put("TenantId", "tenant1")
+                .put("Clients", new JsonArray().add(new JsonObject()));
+
+        List<JsonObject> result = UsageDataMapper.map(usageData);
+
+        assertTrue(result.isEmpty());
     }
 
-    public static String getInstanceId(final JsonObject json) {
-        return json.getJsonObject("SourceHostId").getString("Id");
+    @Test
+    public void testConvertLineOfStrings() {
+        JsonObject jsonObject1 = new JsonObject().put("key", "value1");
+        JsonObject jsonObject2 = new JsonObject().put("key", "value2");
+
+        String result = UsageDataMapper.convertLineOfStrings(List.of(jsonObject1, jsonObject2));
+
+        assertEquals("{\"key\":\"value1\"}\n{\"key\":\"value2\"}", result);
     }
 
-    public static String getTenantId(final JsonObject json) {
-        return json.getString("TenantId");
-    }
+    @Test
+    public void testGetCorrelationId() {
+        JsonObject json = new JsonObject()
+                .put("SourceHostId", new JsonObject().put("Id", "host1"))
+                .put("LastMessagePublishedTime", "2023-01-01T00:00:00Z");
 
-    private static List<Feature> mapFeature(final JsonArray features, final Long updateTime) {
+        try (MockedStatic<UUID> mockedUUID = mockStatic(UUID.class)) {
+            mockedUUID.when(UUID::randomUUID).thenReturn(UUID.fromString("123e4567-e89b-12d3-a456-556642440000"));
 
-        return features
-                .stream()
-                .map(item -> {
-                    final JsonObject feature = (JsonObject) item;
-                    final Long usageTime = updateTime == null
-                            ? feature.getLong("LastConsumeTime")
-                            : updateTime;
+            String correlationId = UsageDataMapper.getCorrelationId(json);
 
-                    if (usageTime == null) {
-                        LOG.warn("Usage time is null for the feature {}", feature.getString("Name"));
-                    }
-
-
-                    return Feature.builder()
-                            .item(feature.getString("Name"))
-                            .itemVersion(feature.getString("Version"))
-                            .itemQuantity(feature.getDouble("UsageCount"))
-                            .mappedEntitledCount(feature.getInteger("Count"))
-                            .meter(DEFAULT_METER)
-                            .meterCost(DEFAULT_METER_COST)
-                            .meterType(feature.getString("Type").toLowerCase())
-                            .meterQuantity(feature.getDouble("UsageCount"))
-                            .used(feature.getDouble("TotalUsedCount"))
-                            .partial(feature.getBoolean("IsPartial"))
-                            .overdraftCount(feature.getInteger("Overdraft"))
-                            .activationIds(convertJsonArrayToArray(feature.getJsonArray("ActivationIds")))
-                            .entitledArticles(convertJsonArrayToArray(feature.getJsonArray("EntitledArticles")))
-                            .entitledArticleVersions(convertJsonArrayToArray(feature.getJsonArray("EntitledArticleVersions")))
-                            .usageTime(usageTime)
-                            .controlsApplied(getControlApplied(feature.getString("PartitionName")))
-                            .build();
-                })
-                .toList();
-    }
-
-    private static JsonObject getControlApplied(final String partitionInfo) {
-        if (!StringUtils.isEmpty(partitionInfo)) {
-            return new JsonObject().put(
-                    "partition",
-                    partitionInfo
-            );
+            assertEquals("host1_2023-01-01T00:00:00Z_123e4567-e89b-12d3-a456-556642440000", correlationId);
         }
-
-        return null;
     }
 
-    private static String[] convertJsonArrayToArray(JsonArray jsonArray) {
-        if (jsonArray != null) {
-            String[] array = new String[jsonArray.size()];
-            for (int i = 0; i < jsonArray.size(); i++) {
-                array[i] = jsonArray.getString(i);
-            }
-            return array;
-        }
-        return null;
+    @Test
+    public void testGetInstanceId() {
+        JsonObject json = new JsonObject().put("SourceHostId", new JsonObject().put("Id", "instance1"));
+
+        String instanceId = UsageDataMapper.getInstanceId(json);
+
+        assertEquals("instance1", instanceId);
     }
 
+    @Test
+    public void testGetTenantId() {
+        JsonObject json = new JsonObject().put("TenantId", "tenant1");
+
+        String tenantId = UsageDataMapper.getTenantId(json);
+
+        assertEquals("tenant1", tenantId);
+    }
+
+    @Test
+    public void testMapFeature_withValidFeatures() {
+        JsonArray features = new JsonArray()
+                .add(new JsonObject().put("Name", "feature1").put("LastConsumeTime", 1000L).put("Type", "standard"));
+
+        List<Feature> result = UsageDataMapper.mapFeature(features, null);
+
+        assertEquals(1, result.size());
+        assertEquals("feature1", result.get(0).getItem());
+    }
+
+    @Test
+    public void testMapFeature_withNullUsageTime() {
+        JsonArray features = new JsonArray()
+                .add(new JsonObject().put("Name", "feature1").put("Type", "standard"));
+
+        List<Feature> result = UsageDataMapper.mapFeature(features, null);
+
+        assertEquals(1, result.size());
+        assertNull(result.get(0).getUsageTime());
+    }
+
+    @Test
+    public void testGetControlApplied_withPartitionInfo() {
+        JsonObject controlApplied = UsageDataMapper.getControlApplied("partition1");
+
+        assertNotNull(controlApplied);
+        assertEquals("partition1", controlApplied.getString("partition"));
+    }
+
+    @Test
+    public void testGetControlApplied_withoutPartitionInfo() {
+        JsonObject controlApplied = UsageDataMapper.getControlApplied("");
+
+        assertNull(controlApplied);
+    }
+
+    @Test
+    public void testConvertJsonArrayToArray() {
+        JsonArray jsonArray = new JsonArray().add("value1").add("value2");
+
+        String[] result = UsageDataMapper.convertJsonArrayToArray(jsonArray);
+
+        assertArrayEquals(new String[]{"value1", "value2"}, result);
+    }
+
+    @Test
+    public void testConvertJsonArrayToArray_withNull() {
+        String[] result = UsageDataMapper.convertJsonArrayToArray(null);
+
+        assertNull(result);
+    }
 }
