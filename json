@@ -1,10 +1,32 @@
-package com.usage.utils;
+import org.junit.jupiter.api.Test;
 
-public class Operators {
-    public static int byteArrayToInt(byte[] b) {
-        return (b[0] << 24) & 0xff000000 |
-                (b[1] << 16) & 0x00ff0000 |
-                (b[2] << 8) & 0x0000ff00 |
-                (b[3]) & 0x000000ff;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+public class OperatorsTest {
+
+    @Test
+    public void testByteArrayToInt() {
+        // Test with typical 4-byte values
+        byte[] bytes = {0x01, 0x02, 0x03, 0x04};
+        int result = Operators.byteArrayToInt(bytes);
+        assertEquals(16909060, result); // 0x01020304 in decimal
+
+        // Test with negative values
+        byte[] negativeBytes = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        result = Operators.byteArrayToInt(negativeBytes);
+        assertEquals(-1, result); // All bits set to 1 should be -1 for a signed integer
+
+        // Test with boundary values
+        byte[] minBytes = {0x00, 0x00, 0x00, 0x00};
+        result = Operators.byteArrayToInt(minBytes);
+        assertEquals(0, result); // All zeros should be 0
+
+        byte[] maxBytes = {0x7F, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        result = Operators.byteArrayToInt(maxBytes);
+        assertEquals(2147483647, result); // Maximum positive value for a 4-byte signed integer
+
+        byte[] minNegativeBytes = {(byte) 0x80, 0x00, 0x00, 0x00};
+        result = Operators.byteArrayToInt(minNegativeBytes);
+        assertEquals(-2147483648, result); // Minimum negative value for a 4-byte signed integer
     }
 }
