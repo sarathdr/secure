@@ -1,125 +1,132 @@
-import io.vertx.core.Future;
-import io.vertx.jdbcclient.JDBCPool;
-import io.vertx.sqlclient.Row;
-import io.vertx.sqlclient.RowSet;
-import io.vertx.sqlclient.Tuple;
-import io.vertx.sqlclient.impl.RowImpl;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
+package com.usage.handlers.rest;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
-import com.flexnet.lm.binary.PublisherIdentityRecord;
-import com.flexnet.lm.signer.Signer;
-import com.flexnet.lm.signer.SignerFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
+import com.usage.common.EventBusAddresses;
+import com.usage.utils.Operators;
+import io.vertx.core.Handler;
 import io.vertx.core.buffer.Buffer;
-import org.junit.jupiter.api.extension.ExtendWith;
-import java.util.Iterator;
+import io.vertx.core.eventbus.DeliveryOptions;
+import io.vertx.core.eventbus.EventBus;
+import io.vertx.core.json.JsonArray;
+import io.vertx.core.json.JsonObject;
+import io.vertx.ext.web.Router;
+import io.vertx.ext.web.RoutingContext;
+import io.vertx.ext.web.handler.BodyHandler;
+import io.vertx.ext.web.impl.RoutingContextInternal;
+import io.vertx.json.schema.SchemaException;
 
-@ExtendWith(MockitoExtension.class)
-public class DbSignatureValidatorTest {
+import java.net.URI;
+import java.util.Base64;
+import java.util.Set;
 
-    @Mock
-    private JDBCPool jdbcPool;
+public class UsageRequestHandler implements RequestHandler {
+    private static final JsonSchema VALIDATION_SCHEMA;
+    private final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    @Mock
-    private RowSet<Row> rowSet;
-
-    @Mock
-    private Row row;
-
-    @Mock
-    private Signer signer;
-
-    @Mock
-    private PublisherIdentityRecord identity;
-
-    private DbSignatureValidator dbSignatureValidator;
-    private final byte[] signature = new byte[]{1, 2, 3};
-    private final byte[] data = new byte[]{4, 5, 6};
-
-    @BeforeEach
-    public void setup() {
-        dbSignatureValidator = DbSignatureValidator.create(jdbcPool);
+    static {
+        final String REQ_SCHEMA_PATH = "classpath:/jsonRequestSchema.json";
+        final JsonSchemaFactory factory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012);
+        VALIDATION_SCHEMA = factory.getSchema(URI.create(REQ_SCHEMA_PATH));
     }
 
-    @Test
-    public void testCreate() {
-        assertNotNull(dbSignatureValidator);
+    private final EventBus eventBus;
+
+
+    private UsageRequestHandler(final EventBus eventBus) {
+        this.eventBus = eventBus;
     }
 
-    @Test
-    public void testValidateSignatureNoRows() {
-        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
-        when(rowSet.size()).thenReturn(0);
-
-        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
-
-        assertTrue(result.succeeded());
-        assertFalse(result.result());
+    public static UsageRequestHandler create(final EventBus eventBus) {
+        return new UsageRequestHandler(eventBus);
     }
 
-    @Test
-    public void testValidateSignatureSuccess() throws Exception {
-        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
-        when(rowSet.size()).thenReturn(1);
-        when(rowSet.iterator()).thenReturn(new Iterator<Row>() {
-            private boolean hasNext = true;
+    @Override
+    public void registerHandlers(final Router router) {
+        router.post(ApiPath.API_SYNC_JSON)
+                .handler(validateJsonBody())
+                .handler(processJsonRequest());
 
-            @Override
-            public boolean hasNext() {
-                return hasNext;
-            }
-
-            @Override
-            public Row next() {
-                hasNext = false;
-                return row;
-            }
-        });
-        when(row.getBuffer(DbSignatureValidator.IDENTITY_COLUMN_NAME)).thenReturn(Buffer.buffer(new byte[]{1, 2, 3}));
-        when(identity.parseAll(any())).thenReturn(identity);
-        when(identity.parse()).thenReturn(identity);
-        when(SignerFactory.getInstance(any(), any())).thenReturn(signer);
-        when(signer.isSignatureValid(any())).thenReturn(true);
-
-        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
-
-        assertTrue(result.succeeded());
-        assertTrue(result.result());
+        router.post(ApiPath.API_SYNC_FILE)
+                .handler(
+                        BodyHandler.create()
+                                .setMergeFormAttributes(true)
+                                .setDeleteUploadedFilesOnEnd(true)
+                )
+                .handler(parseFile())
+                .handler(validateJsonBody())
+                .handler(processJsonRequest());
     }
 
-    @Test
-    public void testValidateSignatureFailureDuringProcessing() throws Exception {
-        when(jdbcPool.preparedQuery(anyString())).thenReturn(Future.succeededFuture(rowSet));
-        when(rowSet.size()).thenReturn(1);
-        when(rowSet.iterator()).thenReturn(new Iterator<Row>() {
-            private boolean hasNext = true;
+    private Handler<RoutingContext> validateJsonBody() {
+        return (routingContext) -> {
+            try {
+                final JsonNode jsonNode = OBJECT_MAPPER.readTree(routingContext.body().asString());
+                final Set<ValidationMessage> validations = VALIDATION_SCHEMA.validate(jsonNode);
 
-            @Override
-            public boolean hasNext() {
-                return hasNext;
+                if (validations.isEmpty()) {
+                    routingContext.next();
+                } else {
+                    final JsonArray errors = new JsonArray();
+                    validations.forEach(validationMessage -> errors.add(validationMessage.getMessage()));
+
+                    routingContext.response()
+                            .setStatusCode(400)
+                            .putHeader(CONTENT_TYPE, JSON_CONTENT)
+                            .end(JsonObject.of(ERR_MESSAGE_KEY, errors).toBuffer());
+                }
+
+            } catch (SchemaException | ClassCastException | JsonProcessingException e) {
+                final JsonArray errors = new JsonArray();
+                final JsonObject error = JsonObject.of(ERR_MESSAGE_KEY, errors.add("Invalid json request. " + e.getMessage()));
+
+                routingContext.response()
+                        .setStatusCode(400)
+                        .putHeader(CONTENT_TYPE, JSON_CONTENT)
+                        .end(error.toBuffer());
             }
+        };
+    }
 
-            @Override
-            public Row next() {
-                hasNext = false;
-                return row;
-            }
-        });
-        when(row.getBuffer(DbSignatureValidator.IDENTITY_COLUMN_NAME)).thenReturn(Buffer.buffer(new byte[]{1, 2, 3}));
-        when(identity.parseAll(any())).thenThrow(new RuntimeException("Test exception"));
+    private Handler<RoutingContext> processJsonRequest() {
+        return (routingContext) -> {
+            final DeliveryOptions deliveryOptions = new DeliveryOptions()
+                    .addHeader(SIGNATURE_HEADER, routingContext.request().getHeader(SIGNATURE_HEADER));
 
-        Future<Boolean> result = dbSignatureValidator.validateSignature("tenantId", "instanceId", signature, data);
+            eventBus.request(EventBusAddresses.PROCESS_SYNC_MESSAGE, routingContext.body().buffer(), deliveryOptions)
+                    .onSuccess(resp -> {
+                        final JsonObject response = (JsonObject) resp.body();
 
-        assertTrue(result.failed());
-        assertEquals("Test exception", result.cause().getMessage());
+                        routingContext.response()
+                                .putHeader(CONTENT_TYPE, JSON_CONTENT)
+                                .setStatusCode(200)
+                                .end(response.toString());
+                    })
+                    .onFailure((error) -> {
+                        routingContext.fail(error.getCause());
+                    });
+        };
+
+    }
+
+    private Handler<RoutingContext> parseFile() {
+        return (routingContext) -> {
+            final Buffer buffer = routingContext.body().buffer();
+            final byte[] signatureLength = buffer.getBytes(0, 4);
+            final int sigLength = Operators.byteArrayToInt(signatureLength);
+
+            final byte[] signature = buffer.getBytes(4, sigLength + 4);
+            final byte[] json = buffer.getBytes(4 + sigLength, buffer.length());
+
+            ((RoutingContextInternal) routingContext).setBody(Buffer.buffer(json));
+            routingContext.request().headers().add(SIGNATURE_HEADER, Base64.getEncoder().encodeToString(signature));
+
+            routingContext.next();
+        };
     }
 }
