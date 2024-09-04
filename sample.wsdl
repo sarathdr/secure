@@ -1,0 +1,2101 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?><!-- Document: FulfillmentService.wsdl 
+    Description: Web service to manage hosts. --><definitions xmlns="http://schemas.xmlsoap.org/wsdl/" xmlns:http="http://schemas.xmlsoap.org/wsdl/http/" xmlns:mime="http://schemas.xmlsoap.org/wsdl/mime/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/" xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/" xmlns:tns="urn:com.flexnet.lfs.webservice" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:com.flexnet.lfs.webservice">
+	<types>
+		<schema xmlns="http://www.w3.org/2001/XMLSchema" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" elementFormDefault="qualified" targetNamespace="urn:com.flexnet.lfs.webservice">
+			<include schemaLocation="./FulfillmentServiceTypes.xsd"/>
+		</schema>
+	</types>
+		
+    <!--==== Begin Webservice Request/Response ====-->	    
+	<!-- createServer -->
+	<message name="createServerRequest">
+		<part element="tns:createServerRequest" name="request"/>
+	</message>
+	<message name="createServerResponse">
+		<part element="tns:createServerResponse" name="response"/>
+	</message>
+	<!-- createHost -->
+	<message name="createHostRequest">
+		<part element="tns:createHostRequest" name="request"/>
+	</message>
+	<message name="createHostResponse">
+		<part element="tns:createHostResponse" name="response"/>
+	</message>
+    <!-- getHost -->
+	<message name="getHostRequest">
+		<part element="tns:getHostRequest" name="request"/>
+	</message>
+	<message name="getHostResponse">
+		<part element="tns:getHostResponse" name="response"/>
+	</message>	
+	<!-- editHost -->
+	<message name="editHostRequest">
+		<part element="tns:editHostRequest" name="request"/>
+	</message>
+	<message name="editHostResponse">
+		<part element="tns:editHostResponse" name="response"/>
+	</message>	
+	<!-- getFeatures -->
+	<message name="getFeaturesRequest">
+		<part element="tns:getFeaturesRequest" name="request"/>
+	</message>
+	<message name="getFeaturesResponse">
+		<part element="tns:getFeaturesResponse" name="response"/>
+	</message>
+	
+	<!-- mapAddOns -->
+	<message name="mapAddOnsRequest">
+		<part element="tns:mapAddOnsRequest" name="request"/>
+	</message>
+	<message name="mapAddOnsResponse">
+		<part element="tns:mapAddOnsResponse" name="response"/>
+	</message>
+	<!-- getMaxMappable -->
+	<message name="getMaxMappableRequest">
+		<part element="tns:getMaxMappableRequest" name="request"/>
+	</message>
+	<message name="getMaxMappableResponse">
+		<part element="tns:getMaxMappableResponse" name="response"/>
+	</message>
+	<!-- getMaxMappableWithoutCallback -->
+	<message name="getMaxMappableWithoutCallbackRequest">
+		<part element="tns:getMaxMappableWithoutCallbackRequest" name="request"/>
+	</message>
+	<!-- getServer -->
+	<message name="getServerRequest">
+		<part element="tns:getServerRequest" name="request"/>
+	</message>
+	<message name="getServerResponse">
+		<part element="tns:getServerResponse" name="response"/>
+	</message>
+	<!-- getServedClient -->
+	<message name="getServedClientRequest">
+		<part element="tns:getServedClientRequest" name="request"/>
+	</message>
+	<message name="getServedClientResponse">
+		<part element="tns:getServedClientResponse" name="response"/>
+	</message>	
+	<!-- getHosts -->
+	<message name="getHostsRequest">
+		<part element="tns:getHostsRequest" name="request"/>
+	</message>
+	<message name="getHostsResponse">
+		<part element="tns:getHostsResponse" name="response"/>
+	</message>
+	<!-- getAddOnMappings -->
+	<message name="getAddOnMappingsRequest">
+		<part element="tns:getAddOnMappingsRequest" name="request"/>
+	</message>
+	<message name="getAddOnMappingsResponse">
+		<part element="tns:getAddOnMappingsResponse" name="response"/>
+	</message>
+	<!-- getAddOnMappingsCount -->
+	<message name="getAddOnMappingsCountRequest">
+		<part element="tns:getAddOnMappingsCountRequest" name="request"/>
+	</message>
+	<message name="getAddOnMappingsCountResponse">
+		<part element="tns:getAddOnMappingsCountResponse" name="response"/>
+	</message>
+	<!-- findServersForEnterprise -->
+	<message name="findServersForEnterpriseRequest">
+		<part element="tns:findServersForEnterpriseRequest" name="request"/>
+	</message>
+	<message name="findServersForEnterpriseResponse">
+		<part element="tns:findServersForEnterpriseResponse" name="response"/>
+	</message>
+	<!-- getIdentity -->
+	<message name="getIdentityRequest">
+		<part element="tns:getIdentityRequest" name="request"/>
+	</message>
+	<message name="getIdentityResponse">
+		<part element="tns:getIdentityResponse" name="response"/>
+	</message>
+	<!-- createIdentity -->
+	<message name="createIdentityRequest">
+		<part element="tns:createIdentityRequest" name="request"/>
+	</message>
+	<message name="createIdentityResponse">
+		<part element="tns:createIdentityResponse" name="response"/>
+	</message>
+	<!-- updateIdentity -->
+	<message name="updateIdentityRequest">
+		<part element="tns:updateIdentityRequest" name="request"/>
+	</message>
+	<message name="updateIdentityResponse">
+		<part element="tns:updateIdentityResponse" name="response"/>
+	</message>
+	<!-- getSigners -->
+	<message name="getSignersRequest">
+		<part element="tns:getSignersRequest" name="request"/>
+	</message>	
+	<message name="getSignersResponse">
+		<part element="tns:getSignersResponse" name="response"/>
+	</message>
+	<!-- createTenant -->
+	<message name="createTenantRequest">
+		<part element="tns:createTenantRequest" name="request"/>
+	</message>
+	<message name="createTenantResponse">
+		<part element="tns:createTenantResponse" name="response"/>
+	</message>	
+	<!-- listIdentities -->
+	<message name="listIdentitiesRequest">
+		<part element="tns:listIdentitiesRequest" name="request"/>
+	</message>
+	<message name="listIdentitiesResponse">
+		<part element="tns:listIdentitiesResponse" name="response"/>
+	</message>	
+	<!-- listPublishers -->
+	<message name="listPublishersRequest">
+		<part element="tns:listPublishersRequest" name="request"/>
+	</message>
+	<message name="listPublishersResponse">
+		<part element="tns:listPublishersResponse" name="response"/>
+	</message>
+	<!-- createPublisher -->
+	<message name="createPublisherRequest">
+		<part element="tns:createPublisherRequest" name="request"/>
+	</message>
+	<message name="createPublisherResponse">
+		<part element="tns:createPublisherResponse" name="response"/>
+	</message>
+	<!-- createDevice -->
+	<message name="createDeviceRequest">
+		<part element="tns:createDeviceRequest" name="request"/>
+	</message>
+	<message name="createDeviceResponse">
+		<part element="tns:createDeviceResponse" name="response"/>
+	</message>
+	<!-- searchDevice -->
+	<message name="searchDeviceRequest">
+		<part element="tns:searchDeviceRequest" name="request"/>
+	</message>
+	<message name="searchDeviceResponse">
+		<part element="tns:searchDeviceResponse" name="response"/>
+	</message>
+	<!-- editDevice -->
+	<message name="editDeviceRequest">
+		<part element="tns:editDeviceRequest" name="request"/>
+	</message>
+	<message name="editDeviceResponse">
+		<part element="tns:editDeviceResponse" name="response"/>
+	</message>
+	<!-- returnDevice -->
+	<message name="returnDeviceRequest">
+		<part element="tns:returnDeviceRequest" name="request"/>
+	</message>
+	<message name="returnDeviceResponse">
+		<part element="tns:returnDeviceResponse" name="response"/>
+	</message>
+	<!-- returnHost -->
+	<message name="returnHostRequest">
+		<part element="tns:returnHostRequest" name="request"/>
+	</message>
+	<message name="returnHostResponse">
+		<part element="tns:returnHostResponse" name="response"/>
+	</message>	
+    <!-- claimDevice -->
+	<message name="claimDeviceRequest">
+		<part element="tns:claimDeviceRequest" name="request"/>
+	</message>
+	<message name="claimDeviceResponse">
+		<part element="tns:claimDeviceResponse" name="response"/>
+	</message>
+	<!-- removeAddOns -->
+	<message name="removeAddOnsRequest">
+		<part element="tns:removeAddOnsRequest" name="request"/>
+	</message>
+	<message name="removeAddOnsResponse">
+		<part element="tns:removeAddOnsResponse" name="response"/>
+	</message>
+	<!-- addAddOns -->
+	<message name="addAddOnsRequest">
+		<part element="tns:addAddOnsRequest" name="request"/>
+	</message>
+	<message name="addAddOnsResponse">
+		<part element="tns:addAddOnsResponse" name="response"/>
+	</message>
+	<!-- getDevice -->
+	<message name="getDeviceRequest">
+		<part element="tns:getDeviceRequest" name="request"/>
+	</message>
+	<message name="getDeviceResponse">
+		<part element="tns:getDeviceResponse" name="response"/>
+	</message>
+	<!-- processBinaryRequest -->
+	<message name="processBinaryRequestInput">
+		<part element="tns:processBinaryRequestInput" name="request"/>
+	</message>
+	<message name="processBinaryRequestOutput">
+		<part element="tns:processBinaryRequestOutput" name="response"/>
+	</message>
+	
+	<message name="capabilityResponse">
+		<part element="tns:capabilityResponseOutput" name="response"/>
+	</message>
+	<!-- getCapabilityResponse -->
+    <message name="getCapabilityResponse">
+		<part element="tns:getCapabilityResponseInput" name="request"/>
+	</message>	
+    <message name="generateCapabilityResponse">
+		<part element="tns:generateCapabilityResponseInput" name="request"/>
+	</message>
+    <message name="getSupportedHostIdTypesRequest">
+		<part element="tns:getSupportedHostIdTypesRequest" name="request"/>
+	</message>
+    <message name="getSupportedHostIdTypesResponse">
+		<part element="tns:getSupportedHostIdTypesResponse" name="response"/>
+	</message>
+    <message name="searchHostHistoryRequest">
+		<part element="tns:searchHostHistoryRequest" name="request"/>
+	</message>
+    <message name="searchHostHistoryResponse">
+		<part element="tns:searchHostHistoryResponse" name="response"/>
+	</message>
+    <message name="searchRequestHistoryInput">
+		<part element="tns:searchRequestHistoryInput" name="request"/>
+	</message>
+    <message name="searchRequestHistoryResponse">
+		<part element="tns:searchRequestHistoryResponse" name="response"/>
+	</message>			
+    <message name="searchServersRequest">
+		<part element="tns:searchServersRequest" name="request"/>
+	</message>
+    <message name="searchServersResponse">
+		<part element="tns:searchServersResponse" name="response"/>
+	</message>
+    <message name="searchServedClientsRequest">
+		<part element="tns:searchServedClientsRequest" name="request"/>
+	</message>
+    <message name="searchServedClientsResponse">
+		<part element="tns:searchServedClientsResponse" name="response"/>
+	</message>	
+    <message name="updateHostOwnerRequest">
+		<part element="tns:updateHostOwnerRequest" name="request"/>
+	</message>
+    <message name="updateHostOwnerResponse">
+		<part element="tns:updateHostOwnerResponse" name="response"/>
+	</message>				
+	<!-- searchSyncHistory -->
+	<message name="searchSyncHistoryRequest">
+		<part element="tns:searchSyncHistoryRequest" name="request"/>
+	</message>
+	<message name="searchSyncHistoryResponse">
+		<part element="tns:searchSyncHistoryResponse" name="response"/>
+	</message>
+	<message name="createDeviceSeriesRequest">
+		<part element="tns:createDeviceSeriesRequest" name="request"/>
+	</message>
+	<message name="createDeviceSeriesResponse">
+		<part element="tns:createDeviceSeriesResponse" name="response"/>
+	</message>
+    <message name="createHostTypeRequest">
+        <part element="tns:createHostTypeRequest" name="request"/>
+    </message>
+    <message name="createHostTypeResponse">
+        <part element="tns:createHostTypeResponse" name="response"/>
+    </message>   
+	<message name="createDeviceModelRequest">
+		<part element="tns:createDeviceModelRequest" name="request"/>
+	</message>
+	<message name="createDeviceModelResponse">
+		<part element="tns:createDeviceModelResponse" name="response"/>
+	</message>
+	<message name="updateDeviceSeriesRequest">
+		<part element="tns:updateDeviceSeriesRequest" name="request"/>
+	</message>
+	<message name="updateDeviceSeriesResponse">
+		<part element="tns:updateDeviceSeriesResponse" name="response"/>
+	</message>
+	<message name="updateDeviceModelRequest">
+		<part element="tns:updateDeviceModelRequest" name="request"/>
+	</message>
+	<message name="updateDeviceModelResponse">
+		<part element="tns:updateDeviceModelResponse" name="response"/>
+	</message>
+	<message name="listDeviceSeriesRequest">
+		<part element="tns:listDeviceSeriesRequest" name="request"/>
+	</message>
+	<message name="listDeviceSeriesResponse">
+		<part element="tns:listDeviceSeriesResponse" name="response"/>
+	</message>
+	<!-- getDeviceSeries -->
+	<message name="getDeviceSeriesRequest">
+		<part element="tns:getDeviceSeriesRequest" name="request"/>
+	</message>
+	<message name="getDeviceSeriesResponse">
+		<part element="tns:getDeviceSeriesResponse" name="response"/>
+	</message>
+	<!-- getDeviceModel -->
+	<message name="getDeviceModelRequest">
+		<part element="tns:getDeviceModelRequest" name="request"/>
+	</message>
+	<message name="getDeviceModelResponse">
+		<part element="tns:getDeviceModelResponse" name="response"/>
+	</message>
+	<message name="listDeviceModelsRequest">
+		<part element="tns:listDeviceModelsRequest" name="request"/>
+	</message>
+	<message name="listDeviceModelsResponse">
+		<part element="tns:listDeviceModelsResponse" name="response"/>
+	</message>
+	<!-- listServerHostTypes -->
+	<message name="listHostTypesRequest">
+		<part element="tns:listHostTypesRequest" name="request"/>
+	</message>
+	<message name="listHostTypesResponse">
+		<part element="tns:listHostTypesResponse" name="response"/>
+	</message>
+	<!-- createServerHostType -->
+	<message name="createServerHostTypeRequest">
+		<part element="tns:createServerHostTypeRequest" name="request"/>
+	</message>
+	<message name="createServerHostTypeResponse">
+		<part element="tns:createServerHostTypeResponse" name="response"/>
+	</message>
+	<message name="generateLicenseFileRequest">
+		<part element="tns:generateLicenseFileRequest" name="request"/>
+	</message>
+	<message name="generateLicenseFileResponse">
+		<part element="tns:generateLicenseFileResponse" name="response"/>
+	</message>	
+	<!-- obsoleteHost -->
+	<message name="obsoleteHostRequest">
+		<part element="tns:obsoleteHostRequest" name="request"/>
+	</message>
+	<message name="obsoleteHostResponse">
+		<part element="tns:obsoleteHostResponse" name="response"/>
+	</message>	
+    <!-- deleteHost -->
+    <message name="deleteHostRequest">
+        <part element="tns:deleteHostRequest" name="request"/>
+    </message>
+    <message name="deleteHostResponse">
+        <part element="tns:deleteHostResponse" name="response"/>
+    </message>  
+	<!-- listServerHostTypes -->
+	<message name="listServerHostTypesRequest">
+		<part element="tns:listServerHostTypesRequest" name="request"/>
+	</message>
+	<message name="listServerHostTypesResponse">
+		<part element="tns:listServerHostTypesResponse" name="response"/>
+	</message>
+	<!-- getDeviceLicenseFile -->
+	<message name="getDeviceLicenseFileRequest">
+		<part element="tns:getDeviceLicenseFileRequest" name="request"/>
+	</message>
+	<message name="getDeviceLicenseFileResponse">
+		<part element="tns:getDeviceLicenseFileResponse" name="response"/>
+	</message>
+	<!-- searchDeviceModels -->
+	<message name="searchDeviceModelsRequest">
+		<part element="tns:searchDeviceModelsRequest" name="request"/>
+	</message>
+	<message name="searchDeviceModelsResponse">
+		<part element="tns:searchDeviceModelsResponse" name="response"/>
+	</message>
+	<!-- editServedClient -->
+	<message name="editServedClientRequest">
+		<part element="tns:editServedClientRequest" name="request"/>
+	</message>
+	<message name="editServedClientResponse">
+		<part element="tns:editServedClientResponse" name="response"/>
+	</message>	
+	<!-- configuration -->
+	<message name="getConfigurationMetadataRequest">
+        <part element="tns:getConfigurationMetadataRequest" name="request"/>
+    </message>
+    <message name="getConfigurationMetadataResponse">
+        <part element="tns:getConfigurationMetadataResponse" name="response"/>
+    </message>
+    <message name="getConfigurationRequest">
+        <part element="tns:getConfigurationRequest" name="request"/>
+    </message>
+    <message name="getConfigurationResponse">
+        <part element="tns:getConfigurationResponse" name="response"/>
+    </message>
+    <message name="setConfigurationRequest">
+        <part element="tns:setConfigurationRequest" name="request"/>
+    </message>
+    <message name="setConfigurationResponse">
+        <part element="tns:setConfigurationResponse" name="response"/>
+    </message>
+	<!-- editServer -->
+	<message name="editServerRequest">
+		<part element="tns:editServerRequest" name="request"/>
+	</message>
+	<message name="editServerResponse">
+		<part element="tns:editServerResponse" name="response"/>
+	</message>
+	<!-- detachUser -->
+	<message name="detachUserRequest">
+		<part element="tns:detachUserRequest" name="request"/>
+	</message>
+	<message name="detachUserResponse">
+		<part element="tns:detachUserResponse" name="response"/>
+	</message>
+	<!-- getServerHostType -->
+	<message name="getServerHostTypeRequest">
+		<part element="tns:getServerHostTypeRequest" name="request"/>
+	</message>
+	<message name="getServerHostTypeResponse">
+		<part element="tns:getServerHostTypeResponse" name="response"/>
+	</message>	
+	<!-- updateServerHostType -->
+	<message name="updateServerHostTypeRequest">
+		<part element="tns:updateServerHostTypeRequest" name="request"/>
+	</message>
+	<message name="updateServerHostTypeResponse">
+		<part element="tns:updateServerHostTypeResponse" name="response"/>
+	</message>
+	<!-- moveDevice -->
+	<message name="moveDeviceRequest">
+		<part element="tns:moveDeviceRequest" name="request"/>
+	</message>
+	<message name="moveDeviceResponse">
+		<part element="tns:moveDeviceResponse" name="response"/>
+	</message>
+	<message name="moveDevicesRequest">
+		<part element="tns:moveDevicesRequest" name="request"/>
+	</message>
+	<message name="moveDevicesResponse">
+		<part element="tns:moveDevicesResponse" name="response"/>
+	</message>	  	
+	<!-- moveServer -->
+	<message name="moveServerRequest">
+		<part element="tns:moveServerRequest" name="request"/>
+	</message>
+	<message name="moveServerResponse">
+		<part element="tns:moveServerResponse" name="response"/>
+	</message>	
+	<!-- getUsageSummary -->
+	<message name="getUsageSummaryRequest">
+		<part element="tns:getUsageSummaryRequest" name="request"/>
+	</message>
+	<message name="getUsageSummaryResponse">
+		<part element="tns:getUsageSummaryResponse" name="response"/>
+	</message>            
+	<message name="isLicenseGeneratedRequest">
+		<part element="tns:isLicenseGeneratedRequest" name="request"/>
+	</message>
+	<message name="isLicenseGeneratedResponse">
+		<part element="tns:isLicenseGeneratedResponse" name="response"/>
+	</message>
+	<message name="getPendingFulfillCountRequest">
+		<part element="tns:getPendingFulfillCountRequest" name="request"/>
+	</message>
+	<message name="getPendingFulfillCountResponse">
+		<part element="tns:getPendingFulfillCountResponse" name="response"/>
+	</message>
+	<message name="isCatalogItemMappedRequest">
+		<part element="tns:isCatalogItemMappedRequest" name="request"/>
+	</message>
+	<message name="isCatalogItemMappedResponse">
+		<part element="tns:isCatalogItemMappedResponse" name="response"/>
+	</message>
+	<message name="isBaseProductUsedInLimitedSeriesRequest">
+		<part element="tns:isBaseProductUsedInLimitedSeriesRequest" name="request"/>
+	</message>
+	<message name="isBaseProductUsedInLimitedSeriesResponse">
+		<part element="tns:isBaseProductUsedInLimitedSeriesResponse" name="response"/>
+	</message>
+	<message name="getFilteredIDTypesForClientRequest">
+		<part element="tns:getFilteredIDTypesForClientRequest" name="request"/>
+	</message>
+	<message name="getFilteredIDTypesForClientResponse">
+		<part element="tns:getFilteredIDTypesForClientResponse" name="response"/>
+	</message>
+	<message name="getFilteredIDTypesForServerRequest">
+		<part element="tns:getFilteredIDTypesForServerRequest" name="request"/>
+	</message>
+	<message name="getFilteredIDTypesForServerResponse">
+		<part element="tns:getFilteredIDTypesForServerResponse" name="response"/>
+	</message>
+	<message name="getAllowedIDTypesRequest">
+		<part element="tns:getAllowedIDTypesRequest" name="request"/>
+	</message>
+	<message name="getAllowedIDTypesResponse">
+		<part element="tns:getAllowedIDTypesResponse" name="response"/>
+	</message>
+	<message name="isRightsIdMappedRequest">
+		<part element="tns:isRightsIdMappedRequest" name="request"/>
+	</message>
+	<message name="isRightsIdMappedResponse">
+		<part element="tns:isRightsIdMappedResponse" name="response"/>
+	</message>
+	<message name="isCatalogItemMappedToLimitedSeriesRequest">
+		<part element="tns:isCatalogItemMappedToLimitedSeriesRequest" name="request"/>
+	</message>
+	<message name="isCatalogItemMappedToLimitedSeriesResponse">
+		<part element="tns:isCatalogItemMappedToLimitedSeriesResponse" name="response"/>
+	</message>
+	<!-- getDefaultServerForEnterprise -->
+	<message name="getDefaultServerForEnterpriseRequest">
+		<part element="tns:getDefaultServerForEnterpriseRequest" name="request"/>
+	</message>	
+	<message name="getHostsForEntitlementTransferRequest">
+		<part element="tns:getHostsForEntitlementTransferRequest" name="request"/>
+	</message>
+	<message name="getHostsForEntitlementTransferResponse">
+		<part element="tns:getHostsForEntitlementTransferResponse" name="response"/>
+	</message>	 
+	<message name="isOwnerReferencedRequest">
+		<part element="tns:isOwnerReferencedRequest" name="request"/>
+	</message>
+	<message name="isOwnerReferencedResponse">
+		<part element="tns:isOwnerReferencedResponse" name="response"/>
+	</message>
+	<message name="searchAddOnsRequest">
+		<part element="tns:searchAddOnsRequest" name="request"/>
+	</message>
+	<message name="searchAddOnsResponse">
+		<part element="tns:searchAddOnsResponse" name="response"/>
+	</message>
+	<message name="returnAddOnsRequest">
+		<part element="tns:returnAddOnsRequest" name="request"/>
+	</message>
+	<message name="returnAddOnsResponse">
+		<part element="tns:returnAddOnsResponse" name="response"/>
+	</message>	
+	<message name="LFSFaultResponse">
+	  <part element="tns:LFSFaultResponse" name="fault"/>
+	</message>	
+	<message name="updateMatchingHostOwnersRequest">
+		<part element="tns:updateMatchingHostOwnersRequest" name="request"/>
+	</message>
+	<message name="updateMatchingHostOwnersResponse">
+		<part element="tns:updateMatchingHostOwnersResponse" name="response"/>
+	</message>	
+	<message name="generateCloneDetectionReportRequest">
+		<part element="tns:generateCloneDetectionReportRequest" name="request"/>
+	</message>
+	<message name="generateCloneDetectionReportResponse">
+		<part element="tns:generateCloneDetectionReportResponse" name="response"/>
+	</message>
+	<message name="usedByDeviceSeriesRequest">
+		<part element="tns:usedByDeviceSeriesRequest" name="request"/>
+	</message>
+	<message name="usedByDeviceSeriesResponse">
+		<part element="tns:usedByDeviceSeriesResponse" name="response"/>
+	</message>	
+	<message name="setHostedServerAdminPasswordRequest">
+		<part element="tns:setHostedServerAdminPasswordRequest" name="request"/>
+	</message>
+	<message name="setHostedServerAdminPasswordResponse">
+		<part element="tns:setHostedServerAdminPasswordResponse" name="response"/>
+	</message>	
+
+    <!--==== End Webservice Request/Response ====-->
+
+    <portType name="FulfillmentServiceInterface">
+		<operation name="createServer">
+			<input message="tns:createServerRequest"/>
+			<output message="tns:createServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createHost">
+			<input message="tns:createHostRequest"/>
+			<output message="tns:createHostResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getHost">
+			<input message="tns:getHostRequest"/>
+			<output message="tns:getHostResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="editHost">
+			<input message="tns:editHostRequest"/>
+			<output message="tns:editHostResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getFeatures">
+			<input message="tns:getFeaturesRequest"/>
+			<output message="tns:getFeaturesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>						
+		<operation name="mapAddOns">
+			<input message="tns:mapAddOnsRequest"/>
+			<output message="tns:mapAddOnsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getMaxMappable">
+			<input message="tns:getMaxMappableRequest"/>
+			<output message="tns:getMaxMappableResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+        <operation name="getMaxMappableWithoutCallback">
+            <input message="tns:getMaxMappableWithoutCallbackRequest"/>
+            <output message="tns:getMaxMappableResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>
+		<operation name="getServer">
+			<input message="tns:getServerRequest"/>
+			<output message="tns:getServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getServedClient">
+			<input message="tns:getServedClientRequest"/>
+			<output message="tns:getServedClientResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="getHosts">
+			<input message="tns:getHostsRequest"/>
+			<output message="tns:getHostsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getAddOnMappings">
+			<input message="tns:getAddOnMappingsRequest"/>
+			<output message="tns:getAddOnMappingsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getAddOnMappingsCount">
+			<input message="tns:getAddOnMappingsCountRequest"/>
+			<output message="tns:getAddOnMappingsCountResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="findServersForEnterprise">
+			<input message="tns:findServersForEnterpriseRequest"/>
+			<output message="tns:findServersForEnterpriseResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getIdentity">
+			<input message="tns:getIdentityRequest"/>
+			<output message="tns:getIdentityResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createIdentity">
+			<input message="tns:createIdentityRequest"/>
+			<output message="tns:createIdentityResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="updateIdentity">
+			<input message="tns:updateIdentityRequest"/>
+			<output message="tns:updateIdentityResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getSigners">
+			<input message="tns:getSignersRequest"/>
+			<output message="tns:getSignersResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createTenant">
+			<input message="tns:createTenantRequest"/>
+			<output message="tns:createTenantResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="listIdentities">
+			<input message="tns:listIdentitiesRequest"/>
+			<output message="tns:listIdentitiesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="listPublishers">
+			<input message="tns:listPublishersRequest"/>
+			<output message="tns:listPublishersResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createPublisher">
+			<input message="tns:createPublisherRequest"/>
+			<output message="tns:createPublisherResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createDevice">
+			<input message="tns:createDeviceRequest"/>
+			<output message="tns:createDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="searchDevice">
+			<input message="tns:searchDeviceRequest"/>
+			<output message="tns:searchDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="editDevice">
+			<input message="tns:editDeviceRequest"/>
+			<output message="tns:editDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="claimDevice">
+			<input message="tns:claimDeviceRequest"/>
+			<output message="tns:claimDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="returnDevice">
+			<input message="tns:returnDeviceRequest"/>
+			<output message="tns:returnDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="returnHost">
+			<input message="tns:returnHostRequest"/>
+			<output message="tns:returnHostResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="removeAddOns">
+			<input message="tns:removeAddOnsRequest"/>
+			<output message="tns:removeAddOnsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="addAddOns">
+			<input message="tns:addAddOnsRequest"/>
+			<output message="tns:addAddOnsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getDevice">
+			<input message="tns:getDeviceRequest"/>
+			<output message="tns:getDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="processBinaryRequest">
+			<input message="tns:processBinaryRequestInput"/>
+			<output message="tns:processBinaryRequestOutput"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getCapabilityResponse">
+			<input message="tns:getCapabilityResponse"/>
+			<output message="tns:capabilityResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="generateCapabilityResponse">
+			<input message="tns:generateCapabilityResponse"/>
+			<output message="tns:capabilityResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getSupportedHostIdTypes">
+			<input message="tns:getSupportedHostIdTypesRequest"/>
+			<output message="tns:getSupportedHostIdTypesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="searchHostHistory">
+			<input message="tns:searchHostHistoryRequest"/>
+			<output message="tns:searchHostHistoryResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="searchRequestHistory">
+			<input message="tns:searchRequestHistoryInput"/>
+			<output message="tns:searchRequestHistoryResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="searchServers">
+			<input message="tns:searchServersRequest"/>
+			<output message="tns:searchServersResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="searchServedClients">
+			<input message="tns:searchServedClientsRequest"/>
+			<output message="tns:searchServedClientsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="updateHostOwner">
+			<input message="tns:updateHostOwnerRequest"/>
+			<output message="tns:updateHostOwnerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>																				
+		<operation name="searchSyncHistory">
+			<input message="tns:searchSyncHistoryRequest"/>
+			<output message="tns:searchSyncHistoryResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createDeviceSeries">
+			<input message="tns:createDeviceSeriesRequest"/>
+			<output message="tns:createDeviceSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+        <operation name="createHostType">
+            <input message="tns:createHostTypeRequest"/>
+            <output message="tns:createHostTypeResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>      
+		<operation name="createDeviceModel">
+			<input message="tns:createDeviceModelRequest"/>
+			<output message="tns:createDeviceModelResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="updateDeviceSeries">
+			<input message="tns:updateDeviceSeriesRequest"/>
+			<output message="tns:updateDeviceSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="updateDeviceModel">
+			<input message="tns:updateDeviceModelRequest"/>
+			<output message="tns:updateDeviceModelResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="listDeviceSeries">
+			<input message="tns:listDeviceSeriesRequest"/>
+			<output message="tns:listDeviceSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getDeviceSeries">
+			<input message="tns:getDeviceSeriesRequest"/>
+			<output message="tns:getDeviceSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>	
+		</operation>
+		<operation name="getDeviceModel">
+			<input message="tns:getDeviceModelRequest"/>
+			<output message="tns:getDeviceModelResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>	
+		</operation>
+		<operation name="listDeviceModels">
+			<input message="tns:listDeviceModelsRequest"/>
+			<output message="tns:listDeviceModelsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="listHostTypes">
+			<input message="tns:listHostTypesRequest"/>
+			<output message="tns:listHostTypesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="createServerHostType">
+			<input message="tns:createServerHostTypeRequest"/>
+			<output message="tns:createServerHostTypeResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="generateLicenseFile">
+			<input message="tns:generateLicenseFileRequest"/>
+			<output message="tns:generateLicenseFileResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="obsoleteHost">
+			<input message="tns:obsoleteHostRequest"/>
+			<output message="tns:obsoleteHostResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>				
+        <operation name="deleteHost">
+            <input message="tns:deleteHostRequest"/>
+            <output message="tns:deleteHostResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>                
+		<operation name="listServerHostTypes">
+			<input message="tns:listServerHostTypesRequest"/>
+			<output message="tns:listServerHostTypesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getDeviceLicenseFile">
+			<input message="tns:getDeviceLicenseFileRequest"/>
+			<output message="tns:getDeviceLicenseFileResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="searchDeviceModels">
+			<input message="tns:searchDeviceModelsRequest"/>
+			<output message="tns:searchDeviceModelsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getConfigurationMetadata">
+            <input message="tns:getConfigurationMetadataRequest"/>
+            <output message="tns:getConfigurationMetadataResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>
+        <operation name="getConfiguration">
+            <input message="tns:getConfigurationRequest"/>
+            <output message="tns:getConfigurationResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>
+        <operation name="setConfiguration">
+            <input message="tns:setConfigurationRequest"/> 
+            <output message="tns:setConfigurationResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>
+		<operation name="editServer">
+			<input message="tns:editServerRequest"/>
+			<output message="tns:editServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+        <operation name="detachUser">
+            <input message="tns:detachUserRequest"/>
+            <output message="tns:detachUserResponse"/>
+            <fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+        </operation>
+		<operation name="getServerHostType">
+			<input message="tns:getServerHostTypeRequest"/>
+			<output message="tns:getServerHostTypeResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="updateServerHostType">
+			<input message="tns:updateServerHostTypeRequest"/>
+			<output message="tns:updateServerHostTypeResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>				
+		<operation name="editServedClient">
+			<input message="tns:editServedClientRequest"/>
+			<output message="tns:editServedClientResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="moveDevice">
+			<input message="tns:moveDeviceRequest"/>
+			<output message="tns:moveDeviceResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="moveDevices">
+			<input message="tns:moveDevicesRequest"/>
+			<output message="tns:moveDevicesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="moveServer">
+			<input message="tns:moveServerRequest"/>
+			<output message="tns:moveServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>						
+		<operation name="getUsageSummary">
+			<input message="tns:getUsageSummaryRequest"/>
+			<output message="tns:getUsageSummaryResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="isLicenseGenerated">
+			<input message="tns:isLicenseGeneratedRequest"/>
+			<output message="tns:isLicenseGeneratedResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getPendingFulfillCount">
+			<input message="tns:getPendingFulfillCountRequest"/>
+			<output message="tns:getPendingFulfillCountResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="isCatalogItemMapped">
+			<input message="tns:isCatalogItemMappedRequest"/>
+			<output message="tns:isCatalogItemMappedResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getFilteredIDTypesForClient">
+			<input message="tns:getFilteredIDTypesForClientRequest"/>
+			<output message="tns:getFilteredIDTypesForClientResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		
+		<operation name="getFilteredIDTypesForServer">
+			<input message="tns:getFilteredIDTypesForServerRequest"/>
+			<output message="tns:getFilteredIDTypesForServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getAllowedIDTypes">
+			<input message="tns:getAllowedIDTypesRequest"/>
+			<output message="tns:getAllowedIDTypesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="isRightsIdMapped">
+			<input message="tns:isRightsIdMappedRequest"/>
+			<output message="tns:isRightsIdMappedResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="isCatalogItemMappedToLimitedSeries">
+			<input message="tns:isCatalogItemMappedToLimitedSeriesRequest"/>
+			<output message="tns:isCatalogItemMappedToLimitedSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="isBaseProductUsedInLimitedSeries">
+			<input message="tns:isBaseProductUsedInLimitedSeriesRequest"/>
+			<output message="tns:isBaseProductUsedInLimitedSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="getDefaultServerForEnterprise">
+			<input message="tns:getDefaultServerForEnterpriseRequest"/>
+			<output message="tns:getServerResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>				
+		<operation name="getHostsForEntitlementTransfer">
+			<input message="tns:getHostsForEntitlementTransferRequest"/>
+			<output message="tns:getHostsForEntitlementTransferResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="isOwnerReferenced">
+			<input message="tns:isOwnerReferencedRequest"/>
+			<output message="tns:isOwnerReferencedResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>		
+		<operation name="searchAddOns">
+			<input message="tns:searchAddOnsRequest"/>
+			<output message="tns:searchAddOnsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="returnAddOns">
+			<input message="tns:returnAddOnsRequest"/>
+			<output message="tns:returnAddOnsResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>	
+		<operation name="updateMatchingHostOwners">
+			<input message="tns:updateMatchingHostOwnersRequest"/>
+			<output message="tns:updateMatchingHostOwnersResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>
+		<operation name="generateCloneDetectionReport">
+			<input message="tns:generateCloneDetectionReportRequest"/>
+			<output message="tns:generateCloneDetectionReportResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>	
+		<operation name="usedByDeviceSeries">
+			<input message="tns:usedByDeviceSeriesRequest"/>
+			<output message="tns:usedByDeviceSeriesResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>			
+		<operation name="setHostedServerAdminPassword">
+			<input message="tns:setHostedServerAdminPasswordRequest"/>
+			<output message="tns:setHostedServerAdminPasswordResponse"/>
+			<fault message="tns:LFSFaultResponse" name="LFSFaultResponse"/>
+		</operation>			
+	</portType>
+	
+	<binding name="FulfillmentServiceBinding" type="tns:FulfillmentServiceInterface">
+		<soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+		<operation name="createServer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>		
+		<operation name="createHost">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getHost">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="editHost">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>	
+		<operation name="getFeatures">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>							
+		<operation name="mapAddOns">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+				<soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getMaxMappable">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+				<soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+        <operation name="getMaxMappableWithoutCallback">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+            <fault name="LFSFaultResponse">
+                <soap:fault name="LFSFaultResponse" use="literal"/>
+            </fault>
+        </operation>
+		<operation name="getServer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			     <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getServedClient">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>		
+		<operation name="getHosts">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getAddOnMappings">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="getAddOnMappingsCount">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="findServersForEnterprise">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="getIdentity">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="createIdentity">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="updateIdentity">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>									
+		</operation>
+		<operation name="getSigners">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>									
+		</operation>
+		<operation name="createTenant">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="listIdentities">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="listPublishers">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="createPublisher">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="createDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>				
+		</operation>
+		<operation name="searchDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="editDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>								
+		</operation>
+		<operation name="returnDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="returnHost">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="claimDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>				
+		<operation name="removeAddOns">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="addAddOns">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="processBinaryRequest">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getCapabilityResponse">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>																		
+		</operation>
+		<operation name="generateCapabilityResponse">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getSupportedHostIdTypes">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>		
+		<operation name="searchHostHistory">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="searchRequestHistory">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>		
+		<operation name="searchServers">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="searchServedClients">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>		
+		<operation name="updateHostOwner">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="searchSyncHistory">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="createDeviceSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="createHostType">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+        <operation name="createDeviceModel">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+            <fault name="LFSFaultResponse">
+                <soap:fault name="LFSFaultResponse" use="literal"/>
+            </fault>
+        </operation>
+		<operation name="updateDeviceSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="updateDeviceModel">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="listDeviceSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="getDeviceSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getDeviceModel">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="listDeviceModels">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="listHostTypes">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="createServerHostType">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>									
+		</operation>
+		<operation name="generateLicenseFile">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="obsoleteHost">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+        <operation name="deleteHost">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+            <fault name="LFSFaultResponse">
+                <soap:fault name="LFSFaultResponse" use="literal"/>
+            </fault>            
+        </operation>
+		<operation name="listServerHostTypes">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="getDeviceLicenseFile">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>								
+		</operation>
+		<operation name="searchDeviceModels">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getConfigurationMetadata">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>            
+        </operation>       
+        <operation name="getConfiguration">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>            
+        </operation>
+        <operation name="setConfiguration">
+            <soap:operation style="document"/>
+            <input>
+                <soap:body use="literal"/>
+            </input>
+            <output>
+                <soap:body use="literal"/>
+            </output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>            
+        </operation>
+		<operation name="editServer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>								
+		</operation>
+		<operation name="detachUser">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="getServerHostType">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="updateServerHostType">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>				
+		<operation name="editServedClient">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="moveDevice">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>
+		<operation name="moveDevices">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>		
+		<operation name="moveServer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>
+		</operation>				
+		<operation name="getUsageSummary">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>		
+		<operation name="isLicenseGenerated">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>		
+		<operation name="getPendingFulfillCount">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>	
+		<operation name="isCatalogItemMapped">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>	
+		<operation name="getFilteredIDTypesForClient">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getFilteredIDTypesForServer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getAllowedIDTypes">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="isRightsIdMapped">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>			
+		<operation name="isCatalogItemMappedToLimitedSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="isBaseProductUsedInLimitedSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="getDefaultServerForEnterprise">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			     <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>
+		<operation name="getHostsForEntitlementTransfer">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			     <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>			
+		</operation>		
+		<operation name="isOwnerReferenced">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>	
+		<operation name="searchAddOns">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="returnAddOns">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>			
+		<operation name="updateMatchingHostOwners">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>	
+		<operation name="generateCloneDetectionReport">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>
+		<operation name="usedByDeviceSeries">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>			
+		<operation name="setHostedServerAdminPassword">
+			<soap:operation style="document"/>
+			<input>
+				<soap:body use="literal"/>
+			</input>
+			<output>
+				<soap:body use="literal"/>
+			</output>
+			<fault name="LFSFaultResponse">
+			    <soap:fault name="LFSFaultResponse" use="literal"/>
+			</fault>						
+		</operation>			
+	</binding>
+
+	<service name="FulfillmentService">
+		<documentation>Manage hosts</documentation>
+		<port binding="tns:FulfillmentServiceBinding" name="FulfillmentService">
+			<soap:address location="http://silo-1.lfs.services.tenants-staging.revenera.internal:80/lfs/services/FulfillmentService"/>
+		</port>
+	</service>
+
+</definitions>
