@@ -57,3 +57,42 @@ public class SoapClientVerticle extends AbstractVerticle {
 
 wsdl2java -d src/main/java -p com.example.soapclient http://example.com/service?wsdl
 
+
+
+
+
+task generateSoapClient {
+    def wsdlFile = file('src/main/resources/your-service.wsdl') // Path to your local WSDL file
+    def outputDir = file("${projectDir}/build/generated-sources/java") // Output directory for generated Java classes
+    def packageName = 'com.example.soapclient' // Replace with your desired package name
+
+    doLast {
+        // Ensure the output directory exists
+        outputDir.mkdirs()
+
+        // Configure the command line arguments for wsdl2java
+        def wsdl2javaArgs = [
+                'java', '-cp', configurations.compileClasspath.asPath,
+                'org.apache.cxf.tools.wsdlto.WSDLToJava',
+                '-d', outputDir,
+                '-p', packageName,
+                '-client',
+                wsdlFile.absolutePath // Use the local WSDL file path
+        ]
+
+        // Run the wsdl2java command
+        exec {
+            commandLine wsdl2javaArgs
+        }
+    }
+}
+
+compileJava.dependsOn generateSoapClient
+
+sourceSets.main.java.srcDir file('build/generated-sources/java') // Include generated sources in the compile step
+
+jar {
+    archiveBaseName = 'wsdl-client'
+    from sourceSets.main.output
+}
+
