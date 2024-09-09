@@ -1,5 +1,3 @@
-package com.usage.handlers.rest.services;
-
 import com.flexnet.lfs.webservice.FulfillmentServiceInterface;
 import com.flexnet.lfs.webservice.GetIdentityRequest;
 import com.flexnet.lfs.webservice.GetIdentityResponse;
@@ -10,63 +8,113 @@ import com.flexnet.lm.signer.SignerFactory;
 import com.usage.models.SignatureCredential;
 import io.vertx.core.Future;
 import org.apache.cxf.jaxws.JaxWsProxyFactoryBean;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-public class WebServiceSignatureValidator implements SignatureValidator {
-    private static final Logger LOG = LoggerFactory.getLogger(WebServiceSignatureValidator.class);
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyByte;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+public class WebServiceSignatureValidatorTest {
+
+    @Mock
     private FulfillmentServiceInterface soapClient;
 
-    private WebServiceSignatureValidator(final String serviceUrl) {
-        soapClient = createSoapClient(serviceUrl);
+    @Mock
+    private GetIdentityResponse identityResponse;
+
+    @Mock
+    private PublisherIdentityRecord publisherIdentityRecord;
+
+    @Mock
+    private Signer signer;
+
+    @InjectMocks
+    private WebServiceSignatureValidator validator;
+
+    @BeforeEach
+    public void setUp() {
+        // Use mock to create SOAP client
+        validator = WebServiceSignatureValidator.create("http://test-url.com");
+        validator.soapClient = soapClient;
     }
 
-    public static WebServiceSignatureValidator create(final String serviceUrl) {
-        return new WebServiceSignatureValidator(serviceUrl);
-    }
+    @Test
+    public void testValidateSignature_Success() throws Exception {
+        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
 
-    @Override
-    public Future<Boolean> validateSignature(final SignatureCredential credential) {
+        // Mock soapClient response
+        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenReturn(identityResponse);
+        when(identityResponse.getPublisherIdentity()).thenReturn(publisherIdentityRecord);
+        when(publisherIdentityRecord.getBinaryIdentity()).thenReturn(new byte[]{10, 20, 30});
 
-        final GetIdentityRequest request = new GetIdentityRequest();
-        request.setPublisherId(credential.getTenantId());
-        request.setPublisherName(credential.getVendorName());
-        request.setSignatureName(credential.getIdentityName());
-        request.setIdentityType(IdentityType.CLIENT_SERVER);
+        // Mock static method SignerFactory.getInstance()
+        try (MockedStatic<SignerFactory> signerFactoryMock = mockStatic(SignerFactory.class)) {
+            signerFactoryMock.when(() -> SignerFactory.getInstance(any(PublisherIdentityRecord.class), any(SignerFactory.SignatureType.class)))
+                    .thenReturn(signer);
 
-        try {
-            final GetIdentityResponse response = soapClient.getIdentity(request);
-            byte[] identityData = response.getPublisherIdentity().getBinaryIdentity();
-            final PublisherIdentityRecord identity = new PublisherIdentityRecord();
+            // Mock signer methods
+            doNothing().when(signer).initVerify();
+            doNothing().when(signer).update(anyByte());
+            when(signer.isSignatureValid(any())).thenReturn(true);
 
-            try {
-                identity.parseAll(identityData);
+            // Execute method under test
+            Future<Boolean> result = validator.validateSignature(credential);
 
-                final Signer signer = SignerFactory.getInstance(identity, SignerFactory.SignatureType.CLIENT_SERVER);
-                signer.initVerify();
-                byte[] data = credential.getUsageData();
-
-                for (byte jsonByte : data) {
-                    signer.update(jsonByte & 0xFF);
-                }
-
-                return Future.succeededFuture(signer.isSignatureValid(credential.getSignature()));
-            } catch (Exception e) {
-                LOG.error("Failed to validate signature", e);
-                return Future.failedFuture(e);
-            }
-
-        } catch (Exception e) {
-            LOG.error("Failed to read signature", e);
-            return Future.failedFuture(e);
+            // Validate result
+            assertTrue(result.succeeded());
+            assertTrue(result.result());
         }
-
     }
 
-    private FulfillmentServiceInterface createSoapClient(final String serviceUrl) {
-        final JaxWsProxyFactoryBean factory = new JaxWsProxyFactoryBean();
-        factory.setServiceClass(FulfillmentServiceInterface.class);
-        factory.setAddress(serviceUrl);
-        return (FulfillmentServiceInterface) factory.create();
+    @Test
+    public void testValidateSignature_SignerException() throws Exception {
+        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
+
+        // Mock soapClient response
+        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenReturn(identityResponse);
+        when(identityResponse.getPublisherIdentity()).thenReturn(publisherIdentityRecord);
+        when(publisherIdentityRecord.getBinaryIdentity()).thenReturn(new byte[]{10, 20, 30});
+
+        // Mock static method SignerFactory.getInstance()
+        try (MockedStatic<SignerFactory> signerFactoryMock = mockStatic(SignerFactory.class)) {
+            signerFactoryMock.when(() -> SignerFactory.getInstance(any(PublisherIdentityRecord.class), any(SignerFactory.SignatureType.class)))
+                    .thenReturn(signer);
+
+            // Mock signer methods to throw an exception
+            doNothing().when(signer).initVerify();
+            doThrow(new RuntimeException("Signer error")).when(signer).update(anyByte());
+
+            // Execute method under test
+            Future<Boolean> result = validator.validateSignature(credential);
+
+            // Validate result
+            assertTrue(result.failed());
+            assertEquals("Signer error", result.cause().getMessage());
+        }
+    }
+
+    @Test
+    public void testValidateSignature_SoapClientException() {
+        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
+
+        // Mock soapClient to throw an exception
+        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenThrow(new RuntimeException("SOAP client error"));
+
+        // Execute method under test
+        Future<Boolean> result = validator.validateSignature(credential);
+
+        // Validate result
+        assertTrue(result.failed());
+        assertEquals("SOAP client error", result.cause().getMessage());
     }
 }
