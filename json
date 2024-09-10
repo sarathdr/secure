@@ -1,120 +1,51 @@
-import com.flexnet.lfs.webservice.FulfillmentServiceInterface;
-import com.flexnet.lfs.webservice.GetIdentityRequest;
-import com.flexnet.lfs.webservice.GetIdentityResponse;
-import com.flexnet.lfs.webservice.IdentityType;
-import com.flexnet.lm.binary.PublisherIdentityRecord;
-import com.flexnet.lm.signer.Signer;
-import com.flexnet.lm.signer.SignerFactory;
-import com.usage.models.SignatureCredential;
-import io.vertx.core.Future;
-import org.apache.cxf.jaxws.JaxWsProxyFactoryBean;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockedStatic;
-import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
+I have made a change for the REST end point to accept the byte array instead of JSON. 
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyByte;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+It would be ideal to send the JSON as byte array from LLS rather than plain text or json. When we send JSON data as plain text, it may undergo transformations due to encoding differences, whitespace changes, newline conversions, or character escaping during transmission. These subtle changes can break the digital signature verification since even a single altered byte in the payload will cause the signature to become invalid. By converting JSON to a byte array, you ensure that the exact sequence of bytes representing the data is preserved. This guarantees that the payload received at the other end is in the same format as it was when signed.
 
-@ExtendWith(MockitoExtension.class)
-public class WebServiceSignatureValidatorTest {
 
-    @Mock
-    private FulfillmentServiceInterface soapClient;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
-    @Mock
-    private GetIdentityResponse identityResponse;
+public class JsonByteArrayClient {
 
-    @Mock
-    private PublisherIdentityRecord publisherIdentityRecord;
+    public static void main(String[] args) {
+        try {
+            // JSON data to be sent
+            String jsonData = "{\"name\":\"John Doe\",\"age\":30,\"email\":\"john.doe@example.com\"}";
 
-    @Mock
-    private Signer signer;
+            // Convert JSON string to byte array
+            byte[] jsonBytes = jsonData.getBytes(StandardCharsets.UTF_8);
 
-    @InjectMocks
-    private WebServiceSignatureValidator validator;
+            // URL of the REST API endpoint
+            URL url = new URL("https://example.com/api/endpoint");
 
-    @BeforeEach
-    public void setUp() {
-        // Use mock to create SOAP client
-        validator = WebServiceSignatureValidator.create("http://test-url.com");
-        validator.soapClient = soapClient;
-    }
+            // Open a connection to the endpoint
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setDoOutput(true);
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/octet-stream");
+            connection.setRequestProperty("Content-Length", String.valueOf(jsonBytes.length));
 
-    @Test
-    public void testValidateSignature_Success() throws Exception {
-        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
+            // Write the byte array to the request body
+            try (OutputStream outputStream = connection.getOutputStream()) {
+                outputStream.write(jsonBytes);
+            }
 
-        // Mock soapClient response
-        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenReturn(identityResponse);
-        when(identityResponse.getPublisherIdentity()).thenReturn(publisherIdentityRecord);
-        when(publisherIdentityRecord.getBinaryIdentity()).thenReturn(new byte[]{10, 20, 30});
+            // Get the response code
+            int responseCode = connection.getResponseCode();
+            System.out.println("Response Code: " + responseCode);
 
-        // Mock static method SignerFactory.getInstance()
-        try (MockedStatic<SignerFactory> signerFactoryMock = mockStatic(SignerFactory.class)) {
-            signerFactoryMock.when(() -> SignerFactory.getInstance(any(PublisherIdentityRecord.class), any(SignerFactory.SignatureType.class)))
-                    .thenReturn(signer);
+            // Close the connection
+            connection.disconnect();
 
-            // Mock signer methods
-            doNothing().when(signer).initVerify();
-            doNothing().when(signer).update(anyByte());
-            when(signer.isSignatureValid(any())).thenReturn(true);
-
-            // Execute method under test
-            Future<Boolean> result = validator.validateSignature(credential);
-
-            // Validate result
-            assertTrue(result.succeeded());
-            assertTrue(result.result());
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-    }
-
-    @Test
-    public void testValidateSignature_SignerException() throws Exception {
-        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
-
-        // Mock soapClient response
-        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenReturn(identityResponse);
-        when(identityResponse.getPublisherIdentity()).thenReturn(publisherIdentityRecord);
-        when(publisherIdentityRecord.getBinaryIdentity()).thenReturn(new byte[]{10, 20, 30});
-
-        // Mock static method SignerFactory.getInstance()
-        try (MockedStatic<SignerFactory> signerFactoryMock = mockStatic(SignerFactory.class)) {
-            signerFactoryMock.when(() -> SignerFactory.getInstance(any(PublisherIdentityRecord.class), any(SignerFactory.SignatureType.class)))
-                    .thenReturn(signer);
-
-            // Mock signer methods to throw an exception
-            doNothing().when(signer).initVerify();
-            doThrow(new RuntimeException("Signer error")).when(signer).update(anyByte());
-
-            // Execute method under test
-            Future<Boolean> result = validator.validateSignature(credential);
-
-            // Validate result
-            assertTrue(result.failed());
-            assertEquals("Signer error", result.cause().getMessage());
-        }
-    }
-
-    @Test
-    public void testValidateSignature_SoapClientException() {
-        SignatureCredential credential = new SignatureCredential("tenant", "vendor", "identity", new byte[]{1, 2, 3}, new byte[]{4, 5, 6});
-
-        // Mock soapClient to throw an exception
-        when(soapClient.getIdentity(any(GetIdentityRequest.class))).thenThrow(new RuntimeException("SOAP client error"));
-
-        // Execute method under test
-        Future<Boolean> result = validator.validateSignature(credential);
-
-        // Validate result
-        assertTrue(result.failed());
-        assertEquals("SOAP client error", result.cause().getMessage());
     }
 }
+
+
+
+
