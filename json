@@ -1,51 +1,11 @@
-I have made a change for the REST end point to accept the byte array instead of JSON. 
+Hi Karol,
 
-It would be ideal to send the JSON as byte array from LLS rather than plain text or json. When we send JSON data as plain text, it may undergo transformations due to encoding differences, whitespace changes, newline conversions, or character escaping during transmission. These subtle changes can break the digital signature verification since even a single altered byte in the payload will cause the signature to become invalid. By converting JSON to a byte array, you ensure that the exact sequence of bytes representing the data is preserved. This guarantees that the payload received at the other end is in the same format as it was when signed.
+Hope you are doing well!
 
+We need some assistance from you for Snowflake integration in the production environment. I have pushed a draft, based on the assumption that the AWS account remains the same for both UAT and production, will the roles also remain consistent with those in UAT? 
 
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+Can we clone the private key secrets of the database user? If so, we might need your help with cloning those secrets.
 
-public class JsonByteArrayClient {
+Is there anything else we should consider before applying these changes to production?
 
-    public static void main(String[] args) {
-        try {
-            // JSON data to be sent
-            String jsonData = "{\"name\":\"John Doe\",\"age\":30,\"email\":\"john.doe@example.com\"}";
-
-            // Convert JSON string to byte array
-            byte[] jsonBytes = jsonData.getBytes(StandardCharsets.UTF_8);
-
-            // URL of the REST API endpoint
-            URL url = new URL("https://example.com/api/endpoint");
-
-            // Open a connection to the endpoint
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setDoOutput(true);
-            connection.setRequestMethod("POST");
-            connection.setRequestProperty("Content-Type", "application/octet-stream");
-            connection.setRequestProperty("Content-Length", String.valueOf(jsonBytes.length));
-
-            // Write the byte array to the request body
-            try (OutputStream outputStream = connection.getOutputStream()) {
-                outputStream.write(jsonBytes);
-            }
-
-            // Get the response code
-            int responseCode = connection.getResponseCode();
-            System.out.println("Response Code: " + responseCode);
-
-            // Close the connection
-            connection.disconnect();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-}
-
-
-
-
+It would be great if you could review the code whenever you have some free time.
