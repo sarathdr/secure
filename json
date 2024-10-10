@@ -1,11 +1,107 @@
-Hi Karol,
+import java.io.*;
+import java.net.*;
 
-Hope you are doing well!
+public class FileUploader {
 
-We need some assistance from you for Snowflake integration in the production environment. I have pushed a draft, based on the assumption that the AWS account remains the same for both UAT and production, will the roles also remain consistent with those in UAT? 
+    // Progress bar display for all files
+    public static void updateProgressBar(long totalBytesUploaded, long totalBytes) {
+        int barWidth = 50; // Progress bar width in characters
+        double progress = (double) totalBytesUploaded / totalBytes;
+        int completedBars = (int) (progress * barWidth);
 
-Can we clone the private key secrets of the database user? If so, we might need your help with cloning those secrets.
+        StringBuilder progressBar = new StringBuilder();
+        progressBar.append("[");
+        for (int i = 0; i < barWidth; i++) {
+            if (i < completedBars) {
+                progressBar.append("=");
+            } else {
+                progressBar.append(" ");
+            }
+        }
+        progressBar.append("] ");
+        progressBar.append(String.format("%.2f", progress * 100)).append("%");
 
-Is there anything else we should consider before applying these changes to production?
+        System.out.print("\r" + progressBar.toString());
+    }
 
-It would be great if you could review the code whenever you have some free time.
+    public static void uploadFile(File file, String uploadUrl, long totalBytes, long[] bytesUploadedTracker) throws IOException {
+        // Open a connection to the server
+        HttpURLConnection connection = (HttpURLConnection) new URL(uploadUrl).openConnection();
+        connection.setDoOutput(true);
+        connection.setRequestMethod("POST");
+        connection.setRequestProperty("Content-Type", "application/octet-stream");
+
+        try (OutputStream outputStream = connection.getOutputStream();
+             FileInputStream fileInputStream = new FileInputStream(file)) {
+
+            byte[] buffer = new byte[4096]; // Buffer size for chunked upload
+            int bytesRead;
+            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+                bytesUploadedTracker[0] += bytesRead; // Update total bytes uploaded across all files
+                updateProgressBar(bytesUploadedTracker[0], totalBytes); // Update common progress bar
+            }
+
+            outputStream.flush();
+        }
+
+        // Check the response code
+        int responseCode = connection.getResponseCode();
+        if (responseCode != HttpURLConnection.HTTP_OK) {
+            System.out.println("\nUpload of " + file.getName() + " failed with HTTP code: " + responseCode);
+        }
+    }
+
+    public static void uploadFilesInFolder(String folderPath, String uploadUrl) {
+        File folder = new File(folderPath);
+        File[] files = folder.listFiles();
+
+        if (files == null || files.length == 0) {
+            System.out.println("No files found in the folder.");
+            return;
+        }
+
+        // Calculate the total size of all files
+        long totalBytes = 0;
+        for (File file : files) {
+            if (file.isFile()) {
+                totalBytes += file.length();
+            }
+        }
+
+        if (totalBytes == 0) {
+            System.out.println("No valid files found in the folder.");
+            return;
+        }
+
+        // Array to track total bytes uploaded across all files
+        long[] bytesUploadedTracker = {0};
+
+        // Start uploading each file
+        for (File file : files) {
+            if (file.isFile()) { // Ensure it's a file and not a directory
+                try {
+                    uploadFile(file, uploadUrl, totalBytes, bytesUploadedTracker);
+                } catch (IOException e) {
+                    System.err.println("Failed to upload " + file.getName() + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Once done, complete the progress bar
+        System.out.println("\nAll files have been uploaded.");
+    }
+
+    public static void main(String[] args) {
+        if (args.length != 2) {
+            System.out.println("Usage: java FileUploader <folderPath> <uploadUrl>");
+            return;
+        }
+
+        String folderPath = args[0];
+        String uploadUrl = args[1];
+
+        // Upload files in the specified folder
+        uploadFilesInFolder(folderPath, uploadUrl);
+    }
+}
