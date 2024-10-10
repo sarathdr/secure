@@ -1,35 +1,74 @@
 import java.io.*;
 import java.net.*;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class FileUploader {
 
-    // Progress bar display for all files
-    public static void updateProgressBar(long totalBytesUploaded, long totalBytes) {
-        int barWidth = 50; // Progress bar width in characters
-        double progress = (double) totalBytesUploaded / totalBytes;
-        int completedBars = (int) (progress * barWidth);
+    // Method to append responses or logs to a file
+    public static void appendToFile(String content) {
+        // Get the current date
+        String currentDate = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+        // Create a file with the current date
+        File logFile = new File("log-" + currentDate + ".txt");
 
-        StringBuilder progressBar = new StringBuilder();
-        progressBar.append("[");
-        for (int i = 0; i < barWidth; i++) {
-            if (i < completedBars) {
-                progressBar.append("=");
-            } else {
-                progressBar.append(" ");
-            }
+        // Append the content to the file
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true))) {
+            writer.write(content);
+            writer.newLine();
+            // Ensure the content is written to the file
+            writer.flush();
+            System.out.println("Log entry: " + content); // Debug: Show log content in the console as well
+        } catch (IOException e) {
+            System.err.println("Failed to write to log file: " + e.getMessage());
         }
-        progressBar.append("] ");
-        progressBar.append(String.format("%.2f", progress * 100)).append("%");
-
-        System.out.print("\r" + progressBar.toString());
     }
 
-    public static void uploadFile(File file, String uploadUrl, long totalBytes, long[] bytesUploadedTracker) throws IOException {
+    // Progress bar display for all files
+    public static void updateProgressBar(AtomicLong totalBytesUploaded, long totalBytes, AtomicBoolean isUploading) {
+        int barWidth = 50; // Progress bar width in characters
+        while (isUploading.get()) { // Keep updating while files are being uploaded
+            double progress = (double) totalBytesUploaded.get() / totalBytes;
+            int completedBars = (int) (progress * barWidth);
+
+            StringBuilder progressBar = new StringBuilder();
+            progressBar.append("[");
+            for (int i = 0; i < barWidth; i++) {
+                if (i < completedBars) {
+                    progressBar.append("=");
+                } else {
+                    progressBar.append(" ");
+                }
+            }
+            progressBar.append("] ");
+            progressBar.append(String.format("%.2f", progress * 100)).append("%");
+
+            // Print and flush the progress bar to ensure immediate output
+            System.out.print("\r" + progressBar.toString());
+            System.out.flush();
+
+            // Sleep for a short time before updating again
+            try {
+                Thread.sleep(100); // Update every 100ms
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        
+        // Print the completed progress bar when done
+        System.out.println("\r[==================================================] 100.00%");
+    }
+
+    public static void uploadFile(File file, String uploadUrl, long totalBytes, AtomicLong totalBytesUploaded) throws IOException {
         // Open a connection to the server
         HttpURLConnection connection = (HttpURLConnection) new URL(uploadUrl).openConnection();
         connection.setDoOutput(true);
         connection.setRequestMethod("POST");
         connection.setRequestProperty("Content-Type", "application/octet-stream");
+
+        appendToFile("Starting upload of file: " + file.getName());
 
         try (OutputStream outputStream = connection.getOutputStream();
              FileInputStream fileInputStream = new FileInputStream(file)) {
@@ -38,8 +77,7 @@ public class FileUploader {
             int bytesRead;
             while ((bytesRead = fileInputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
-                bytesUploadedTracker[0] += bytesRead; // Update total bytes uploaded across all files
-                updateProgressBar(bytesUploadedTracker[0], totalBytes); // Update common progress bar
+                totalBytesUploaded.addAndGet(bytesRead); // Update total bytes uploaded across all files
             }
 
             outputStream.flush();
@@ -47,9 +85,13 @@ public class FileUploader {
 
         // Check the response code
         int responseCode = connection.getResponseCode();
-        if (responseCode != HttpURLConnection.HTTP_OK) {
-            System.out.println("\nUpload of " + file.getName() + " failed with HTTP code: " + responseCode);
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            appendToFile("Upload of " + file.getName() + " completed successfully.");
+        } else {
+            appendToFile("Upload of " + file.getName() + " failed with HTTP code: " + responseCode);
         }
+
+        connection.disconnect();
     }
 
     public static void uploadFilesInFolder(String folderPath, String uploadUrl) {
@@ -57,7 +99,7 @@ public class FileUploader {
         File[] files = folder.listFiles();
 
         if (files == null || files.length == 0) {
-            System.out.println("No files found in the folder.");
+            appendToFile("No files found in the folder.");
             return;
         }
 
@@ -70,26 +112,41 @@ public class FileUploader {
         }
 
         if (totalBytes == 0) {
-            System.out.println("No valid files found in the folder.");
+            appendToFile("No valid files found in the folder.");
             return;
         }
 
-        // Array to track total bytes uploaded across all files
-        long[] bytesUploadedTracker = {0};
+        // Atomic variables to track the total bytes uploaded and whether uploading is still in progress
+        AtomicLong totalBytesUploaded = new AtomicLong(0);
+        AtomicBoolean isUploading = new AtomicBoolean(true);
+
+        // Start the progress bar in a separate thread
+        Thread progressThread = new Thread(() -> updateProgressBar(totalBytesUploaded, totalBytes, isUploading));
+        progressThread.start();
 
         // Start uploading each file
         for (File file : files) {
             if (file.isFile()) { // Ensure it's a file and not a directory
+                appendToFile("Uploading " + file.getName() + " (" + file.length() + " bytes)");
                 try {
-                    uploadFile(file, uploadUrl, totalBytes, bytesUploadedTracker);
+                    uploadFile(file, uploadUrl, totalBytes, totalBytesUploaded);
                 } catch (IOException e) {
-                    System.err.println("Failed to upload " + file.getName() + ": " + e.getMessage());
+                    appendToFile("Failed to upload " + file.getName() + ": " + e.getMessage());
                 }
             }
         }
 
-        // Once done, complete the progress bar
-        System.out.println("\nAll files have been uploaded.");
+        // Once done, set isUploading to false to stop the progress bar thread
+        isUploading.set(false);
+
+        // Wait for the progress bar thread to finish
+        try {
+            progressThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        appendToFile("All files have been uploaded.");
     }
 
     public static void main(String[] args) {
@@ -101,7 +158,9 @@ public class FileUploader {
         String folderPath = args[0];
         String uploadUrl = args[1];
 
+        appendToFile("Starting upload process...");
         // Upload files in the specified folder
         uploadFilesInFolder(folderPath, uploadUrl);
+        appendToFile("Upload process completed.");
     }
 }
